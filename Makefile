@@ -53,6 +53,6 @@ format: install-dev
 	uv run ruff format .
 
 test: install-dev
-	uv run pytest
+	uv run python -m pytest
 
 check: lint format test

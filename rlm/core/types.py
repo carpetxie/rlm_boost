@@ -9,7 +9,7 @@ ClientBackend = Literal[
     "vercel",
     "vllm",
     "litellm",
-    "anthropic",
+    "grok",
     "azure_openai",
     "gemini",
 ]

@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from typing import Any
 
@@ -5,6 +6,8 @@ import anthropic
 
 from rlm.clients.base_lm import BaseLM
 from rlm.core.types import ModelUsageSummary, UsageSummary
+
+DEFAULT_ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 
 class AnthropicClient(BaseLM):
@@ -14,12 +17,14 @@ class AnthropicClient(BaseLM):
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None = None,
         model_name: str | None = None,
         max_tokens: int = 32768,
         **kwargs,
     ):
         super().__init__(model_name=model_name, **kwargs)
+        if api_key is None:
+            api_key = DEFAULT_ANTHROPIC_API_KEY
         self.client = anthropic.Anthropic(api_key=api_key)
         self.async_client = anthropic.AsyncAnthropic(api_key=api_key)
         self.model_name = model_name
@@ -42,7 +47,8 @@ class AnthropicClient(BaseLM):
         if system:
             kwargs["system"] = system
 
-        response = self.client.messages.create(**kwargs)
+        with self.client.messages.stream(**kwargs) as stream:
+            response = stream.get_final_message()
         self._track_cost(response, model)
         return response.content[0].text
 
@@ -59,7 +65,8 @@ class AnthropicClient(BaseLM):
         if system:
             kwargs["system"] = system
 
-        response = await self.async_client.messages.create(**kwargs)
+        async with self.async_client.messages.stream(**kwargs) as stream:
+            response = await stream.get_final_message()
         self._track_cost(response, model)
         return response.content[0].text
 
