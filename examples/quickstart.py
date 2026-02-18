@@ -10,10 +10,10 @@ load_dotenv()
 logger = RLMLogger(log_dir="./logs")
 
 rlm = RLM(
-    backend="grok",  # or "openai", "portkey", etc.
+    backend="openai",  # or "portkey", etc.
     backend_kwargs={
-        "model_name": "grok-3",
-        "api_key": os.getenv("GROK_API_KEY"),
+        "model_name": "gpt-5-nano",
+        "api_key": os.getenv("OPENAI_API_KEY"),
     },
     environment="local",
     environment_kwargs={},
