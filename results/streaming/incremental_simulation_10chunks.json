@@ -1,0 +1,44 @@
+{
+  "1": {
+    "task_id": 1,
+    "num_chunks": 10,
+    "incremental": {
+      "pair_checks": 45717,
+      "entity_parses": 595,
+      "retractions": 22002,
+      "final_pairs": 9358,
+      "total_time": 0.025418415782041848,
+      "per_chunk": []
+    },
+    "full_recompute": {
+      "pair_checks": 134580,
+      "entity_parses": 1567,
+      "total_time": 0.03846137516666204
+    },
+    "savings": {
+      "pair_check_pct": 66.02987070887205,
+      "entity_parse_pct": 62.0293554562859
+    }
+  },
+  "19": {
+    "task_id": 19,
+    "num_chunks": 10,
+    "incremental": {
+      "pair_checks": 48688,
+      "entity_parses": 595,
+      "retractions": 25805,
+      "final_pairs": 13380,
+      "total_time": 0.0314028327120468,
+      "per_chunk": []
+    },
+    "full_recompute": {
+      "pair_checks": 134580,
+      "entity_parses": 1567,
+      "total_time": 0.01503716700244695
+    },
+    "savings": {
+      "pair_check_pct": 63.82226185168673,
+      "entity_parse_pct": 62.0293554562859
+    }
+  }
+}
