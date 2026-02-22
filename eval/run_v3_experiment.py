@@ -1,7 +1,16 @@
 """Run v3 RLM pipeline experiment with explicit code template in prompt."""
 import os, json, sys, time
-sys.path.insert(0, '.')
-os.environ['OPENAI_API_KEY'] = open('.env').read().split('=',1)[1].strip()
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Load API key robustly: env var first, then parse .env line-by-line.
+if not os.environ.get('OPENAI_API_KEY'):
+    env_path = Path(__file__).parent.parent / '.env'
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if line.startswith('OPENAI_API_KEY='):
+                os.environ['OPENAI_API_KEY'] = line.split('=', 1)[1].strip()
+                break
 
 from rlm.core.rlm import RLM
 from rlm.utils.prompts import INCREMENTAL_SYSTEM_PROMPT
