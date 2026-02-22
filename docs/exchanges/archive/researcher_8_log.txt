@@ -1,0 +1,29 @@
+The deduplication guard works perfectly. Here's a summary of everything accomplished in Iteration 8:
+
+---
+
+## Iteration 8 Summary
+
+### What Was Done
+
+**All 6 code issues from the critique were addressed:**
+
+1. **`process_chunk` deduplication guard** (`rlm/core/incremental.py`) — Added `_processed_chunk_indices: dict[int, dict]` that caches stats on first call and returns cached result + warning on repeated calls. Converts Failure Mode C from O(u·n) wasteful to O(1). 3 unit tests added and passing.
+
+2. **Stale docstring removed** (`rlm/core/incremental.py`) — The `_find_system_end()` cross-reference note was a copy-paste artifact; removed.
+
+3. **History summary regex fixed** (`rlm/core/history_manager.py`) — Changed from ` ```python ``` ` only to ` ```(?:python|repl) ``` `. This was a silent critical bug: ALL incremental turn code blocks use ` ```repl ``` `, so pruning was producing empty summaries for every incremental turn.
+
+4. **`.env` loading fixed** (`eval/run_v3_experiment.py`) — Replaced fragile `split('=',1)[1]` with line-by-line parser; fixed `sys.path`.
+
+**3 experiments run:**
+
+5. **Experiment 22 — 5-chunk F1 progression** (`eval/f1_progression_experiment.py`): F1 grows monotonically from **0.22 → 0.35 → 0.45 → 0.49 → 0.51** over k=1..5 chunks, 100% compliance (5/5 turns). Pair-check savings confirmed at **22.3%** — matches 22.1% theoretical prediction within 0.2pp. This is the paper's central figure.
+
+6. **Experiment 23 — Tasks 11/13 retraction analysis**: The `~0%` bidirectional claim is empirically **refuted** — Task 11 has **6.1%** and Task 13 has **9.5%** bidirectional retraction rates, comparable to Task 7 (10.4%, classified "unsafe"). `docs/lazy_retraction_analysis.md` updated to reclassify both as unsafe.
+
+7. **Coverage baseline computation** (`eval/compute_coverage_baselines.py`): Oracle F1 ceiling at each chunk count computed. Shows plain context is more entity-dense than labeled context (explaining why incremental RLM exceeds labeled-context coverage ceilings).
+
+**2 documentation corrections:**
+- Removed "~39% weighted token savings" headline; replaced with "22.3% pair-check savings (empirically confirmed)"
+- Corrected lazy retraction safety claims for Tasks 11/13 with empirical evidence
