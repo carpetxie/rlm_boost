@@ -1,0 +1,164 @@
+{
+  "model": "gpt-4o-mini",
+  "gold_pairs_count": 8001,
+  "condition_a": {
+    "condition": "A_incremental",
+    "model": "gpt-4o-mini",
+    "num_chunks": 5,
+    "max_chunk_chars": 5000,
+    "compliance_rate": 1.0,
+    "f1_progression": [
+      {
+        "chunk": 1,
+        "chunk_idx": 0,
+        "compliant": true,
+        "chunks_processed": 1,
+        "pairs": 1128,
+        "pair_checks_total": 1128,
+        "f1": 0.2169,
+        "precision": 0.8777,
+        "recall": 0.1237,
+        "tp": 990,
+        "fp": 138,
+        "fn": 7011,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "elapsed_sec": 28.79
+      },
+      {
+        "chunk": 2,
+        "chunk_idx": 1,
+        "compliant": true,
+        "chunks_processed": 2,
+        "pairs": 2701,
+        "pair_checks_total": 3301,
+        "f1": 0.3534,
+        "precision": 0.7001,
+        "recall": 0.2363,
+        "tp": 1891,
+        "fp": 810,
+        "fn": 6110,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "elapsed_sec": 44.16
+      },
+      {
+        "chunk": 3,
+        "chunk_idx": 2,
+        "compliant": true,
+        "chunks_processed": 3,
+        "pairs": 4095,
+        "pair_checks_total": 6121,
+        "f1": 0.4466,
+        "precision": 0.6596,
+        "recall": 0.3376,
+        "tp": 2701,
+        "fp": 1394,
+        "fn": 5300,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "elapsed_sec": 12.05
+      },
+      {
+        "chunk": 4,
+        "chunk_idx": 3,
+        "compliant": true,
+        "chunks_processed": 4,
+        "pairs": 5565,
+        "pair_checks_total": 9733,
+        "f1": 0.4896,
+        "precision": 0.5968,
+        "recall": 0.4151,
+        "tp": 3321,
+        "fp": 2244,
+        "fn": 4680,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "elapsed_sec": 6.53
+      },
+      {
+        "chunk": 5,
+        "chunk_idx": 4,
+        "compliant": true,
+        "chunks_processed": 5,
+        "pairs": 7140,
+        "pair_checks_total": 14023,
+        "f1": 0.5056,
+        "precision": 0.5361,
+        "recall": 0.4784,
+        "tp": 3828,
+        "fp": 3312,
+        "fn": 4173,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "elapsed_sec": 23.1
+      }
+    ],
+    "final_f1": 0.5056,
+    "final_precision": 0.5361,
+    "final_recall": 0.4784,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "per_turn_tokens": [
+      {
+        "turn": 1,
+        "input": 0,
+        "output": 0
+      },
+      {
+        "turn": 2,
+        "input": 0,
+        "output": 0
+      },
+      {
+        "turn": 3,
+        "input": 0,
+        "output": 0
+      },
+      {
+        "turn": 4,
+        "input": 0,
+        "output": 0
+      },
+      {
+        "turn": 5,
+        "input": 0,
+        "output": 0
+      }
+    ]
+  },
+  "condition_b": {
+    "condition": "B_matched_budget",
+    "model": "gpt-4o-mini",
+    "context_chars": 5000,
+    "f1": 0.0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 8001,
+    "predicted_pairs": 0,
+    "gold_pairs": 8001,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "elapsed_sec": 13.56,
+    "response_preview": "FINAL(\"There are 45 users with at least 1 instance, resulting in a total of 990 unique pairs of users.\")"
+  },
+  "condition_c": {
+    "condition": "C_oracle",
+    "model": "gpt-4o-mini",
+    "context_chars": 25000,
+    "f1": 0.0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 8001,
+    "predicted_pairs": 0,
+    "gold_pairs": 8001,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "elapsed_sec": 18.59,
+    "response_preview": "Based on the analysis of the dataset:\n\n- There are **128 unique users** who each have at least one recorded instance.\n- The total number of unique pairs of users, where both users in each pair have at least one instance, is **8128 pairs**.\n\nThus, the summary of user instance statistics is as follows:\n\n- **Total unique users with instances**: 128\n- **Total unique user pairs (both with at least one instance)**: 8128\n\nFINAL(f\"Total unique users: 128; Total unique user pairs: 8128\")"
+  }
+}
