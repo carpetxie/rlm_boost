@@ -1,0 +1,64 @@
+{
+  "version": "v3_explicit_code_template",
+  "model": "gpt-4o-mini",
+  "max_chunk_chars": 5000,
+  "execution_compliance_rate": 1.0,
+  "f1_from_tracker": {
+    "precision": 0.7309,
+    "recall": 0.4253,
+    "f1": 0.5377,
+    "tp": 3403,
+    "fp": 1253,
+    "fn": 4598,
+    "predicted_pairs": 4656,
+    "gold_pairs": 8001
+  },
+  "f1_from_pair_results_var": {
+    "precision": 0.7309,
+    "recall": 0.4253,
+    "f1": 0.5377,
+    "tp": 3403,
+    "fp": 1253,
+    "fn": 4598,
+    "predicted_pairs": 4656,
+    "gold_pairs": 8001
+  },
+  "chunks_processed": 9,
+  "total_entities": 97,
+  "total_pairs_in_tracker": 4656,
+  "entity_id_sample": [
+    "35398",
+    "85128",
+    "50055",
+    "49674",
+    "25984",
+    "33449",
+    "90987",
+    "55798",
+    "89715",
+    "89840"
+  ],
+  "turn_results": [
+    {
+      "chunk_i": 0,
+      "compliant": true,
+      "chunks_processed": 1,
+      "pair_results_count": 1128,
+      "error": null
+    },
+    {
+      "chunk_i": 1,
+      "compliant": true,
+      "chunks_processed": 7,
+      "pair_results_count": 3003,
+      "error": null
+    },
+    {
+      "chunk_i": 2,
+      "compliant": true,
+      "chunks_processed": 9,
+      "pair_results_count": 4656,
+      "error": null
+    }
+  ]
+}
