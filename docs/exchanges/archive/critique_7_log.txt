@@ -1,0 +1,15 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key findings and decisions in Iteration 7:
+
+---
+
+## Critique Summary — Iteration 7
+
+**The headline finding**: The "100% compliance" result from Experiment 14 is based on a **structurally flawed test**. Reading `results/streaming/live_api_results.json` against `rlm/utils/parsing.py` reveals three defects in `live_api_experiment.py` that prevent it from being a valid RLM pipeline test:
+
+1. **Wrong code block syntax** — the model writes ` ```python ``` ` blocks; `find_code_blocks` only executes ` ```repl ``` ` blocks. All three turns' code would be silently ignored by the RLM engine.
+2. **`checker` is never defined** — the model calls `process_chunk(..., pair_checker=checker)` without defining `checker`. Would raise `NameError` in actual execution.
+3. **`FINAL(Python-code-string)`** — the model places `FINAL(str(sorted(_incremental.pair_tracker.get_pairs())))` inside a code block, not as a literal answer. `find_final_answer` would return Python source code as the answer, not actual pairs.
+
+**Score changes**: Technical Soundness −1 (6/10), Benchmark Performance −1 (5/10), Scalability +1 (6/10).
+
+**The One Big Thing**: Run the actual `RLM(persistent=True)` + `LocalREPL` pipeline with the *canonical* `INCREMENTAL_SYSTEM_PROMPT` (from `rlm/utils/prompts.py`) — not the custom `live_api_experiment.py` script. This is what measures execution compliance and F1. The 100% text-compliance result is still publishable but correctly framed as "LLMs generate protocol-consistent code zero-shot" rather than "LLMs execute the protocol." The three formatting errors discovered are themselves a contribution: they tell you exactly what few-shot examples or fine-tuning (Thrust 1) need to fix.
