@@ -1,0 +1,50 @@
+All Iteration 7 work is confirmed complete. The `critique_latest.md` still shows the Iteration 7 critique (no new Iteration 8 critique has been posted yet), and all results from v3 are persisted to disk. Here's a complete summary of what was accomplished in this session:
+
+---
+
+## Iteration 7 — Session Summary
+
+### What Was Fixed
+
+| Issue | Fix | Status |
+|-------|-----|--------|
+| `REPL_VARS_PREFIX` string coupling (3rd iteration flagged) | Added constant to `parsing.py`, imported in `history_manager.py` with `re.escape()` | ✅ Done |
+| No-op assertion for update-rate experiment | Added `AssertionError` when p>0% final_pairs ≠ baseline | ✅ Done |
+| Multi-seed robustness (Task 19 p=20% marginal result) | Added `--seeds` param, ran 5 seeds → mean -0.0% ± 1.5% | ✅ Done |
+| Live API test didn't test RLM pipeline (3 structural defects) | Built `eval/rlm_pipeline_experiment.py` with correct ```repl``` blocks, defined `check_pair`, used `FINAL_VAR(pair_results)` | ✅ Done |
+| Stale test assertion (`role="user"` vs `role="assistant"`) | Fixed `test_summarize_prunes_with_summary` | ✅ Done |
+
+### Experiments Run
+
+| Experiment | Key Result |
+|------------|-----------|
+| **Exp 18**: No-op assertion + 5-seed update-rate | All 40 (task × rate × seed) combos passed. Task 19 p=20% = **-0.0% ± 1.5%** — break-even confirmed |
+| **Exp 19**: RLM pipeline v1 (default parsing) | 100% compliance, **F1 = 0.0** — Failure Mode A (Date used as entity ID instead of User number) |
+| **Exp 20**: RLM pipeline v2 (explicit entity format) | 100% compliance, **F1 = N/A** — Failure Mode B (FINAL_VAR called before pair_results assigned) |
+| **Exp 21**: RLM pipeline v3 (explicit code template) | 100% compliance, **F1 = 0.54** — bounded by 42% entity coverage, not protocol errors |
+
+### Key Finding: Failure Mode Taxonomy
+
+Three distinct failure modes were identified and characterized — a publishable contribution in its own right:
+
+| Mode | Root Cause | Fix |
+|------|-----------|-----|
+| **A** Entity ID mismatch | Model uses Date strings, not numeric user IDs | Explicit entity key field in task description |
+| **B** FINAL_VAR premature | Model calls FINAL_VAR before assigning pair_results | Root prompt must include explicit assignment step |
+| **C** Multiple process_chunk per turn | Model calls process_chunk in each REPL iteration (×3) | System prompt: "call ONCE per chunk" + deduplication guard |
+
+### Benchmark Deltas
+
+| Metric | Before | After | 
+|--------|--------|-------|
+| Execution compliance | "100% text-level" (invalid measurement) | **100% true execution** (RLM + LocalREPL) |
+| F1 vs gold (Task 1) | Unmeasured | **0.54** (coverage-bounded) |
+| Task 19 p=20% break-even | -0.95% single seed | **-0.0% ± 1.5%** (5 seeds, confirmed) |
+| Tests passing | 172 | **184** (+12) |
+
+### Next Iteration Priorities (when Iteration 8 critique arrives)
+
+1. **Multi-chunk F1 progression** (mandatory): Run pipeline on k=1→5 chunks, plot F1 vs. chunk count. This is the "dynamic" demonstration the paper needs.
+2. **Few-shot prompt fix**: Add 1 example showing correct entity parsing + assignment → expect F1 > 0.54
+3. **`process_chunk` deduplication guard**: Add `processed_chunk_indices: set[int]` to `IncrementalState` to prevent 3× redundant calls per turn (Failure Mode C)
+4. **Full-context run** (~$2): Remove 5K char truncation, measure F1 ceiling (expected ~0.77)

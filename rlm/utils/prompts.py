@@ -122,6 +122,89 @@ def build_rlm_system_prompt(
     ]
 
 
+INCREMENTAL_SYSTEM_PROMPT = textwrap.dedent(
+    """You are tasked with answering a query about data that arrives incrementally in chunks. You have a REPL environment that persists state between chunks. Your goal is INCREMENTAL COMPUTATION: process only new data, reuse cached results, and merge.
+
+The REPL environment provides:
+1. Versioned context: `context_0`, `context_1`, ... — each chunk as it arrives. The latest chunk is your NEW data.
+2. `llm_query(prompt)` and `llm_query_batched(prompts)` — query sub-LLMs for classification/analysis.
+3. `SHOW_VARS()` — see all variables you've created (these persist between chunks!).
+4. `FINAL(answer)` or `FINAL_VAR(var)` — provide your answer.
+5. `_incremental` — a pre-initialized `IncrementalState` object that manages ALL incremental state:
+   - `_incremental.entity_cache` — `EntityCache` storing entity classifications with versioning
+   - `_incremental.pair_tracker` — `PairTracker` with O(degree) retraction support
+   - `_incremental.process_chunk(chunk_index, entities_dict, pair_checker)` — **the primary interface**
+   - `_incremental.get_stats()` — cumulative statistics (pair_checks, retractions, chunks_processed)
+
+## INCREMENTAL COMPUTATION PROTOCOL
+
+**Do NOT create your own `entity_cache = {}` dict.** Use `_incremental.process_chunk()` for all state
+management. Your only responsibilities are:
+1. Implement `parse_entities(context_chunk) -> dict` mapping `entity_id -> attributes_dict`
+2. Implement `check_pair(attrs1, attrs2) -> bool` for your pair condition
+
+### On the FIRST chunk (context_0):
+```repl
+# Step 1: Parse entities from the first chunk into {entity_id: attributes_dict}
+entities = {}
+for line in context_0.strip().split("\\n"):
+    parts = line.split("|")
+    if len(parts) >= 2:
+        entities[parts[0].strip()] = {"type": parts[1].strip()}
+    # Add any other attributes you need from the line
+
+# Step 2: Define your pair condition (persists across chunks automatically)
+def check_pair(attrs1, attrs2):
+    # return True if attrs1 and attrs2 form a valid pair for your task
+    return attrs1["type"] == attrs2["type"]  # example — customize for your task
+
+# Step 3: process_chunk() handles everything:
+#   - Stores entities in EntityCache with versioning
+#   - Checks all pairs using check_pair()
+#   - Records valid pairs in PairTracker
+stats = _incremental.process_chunk(0, entities, pair_checker=check_pair)
+
+# Step 4: Get current results
+pair_results = _incremental.pair_tracker.get_pairs()
+print(f"Chunk 0: {stats['new_entities']} entities, {stats['total_pairs']} pairs")
+```
+
+### On SUBSEQUENT chunks (context_N, where N >= 1):
+```repl
+# Step 1: Parse ONLY the new chunk — do NOT re-read context_0, context_1, etc.
+new_entities = {}
+for line in context_N.strip().split("\\n"):  # replace N with the actual chunk index
+    parts = line.split("|")
+    if len(parts) >= 2:
+        new_entities[parts[0].strip()] = {"type": parts[1].strip()}
+
+# Step 2: process_chunk() handles EVERYTHING automatically:
+#   - Detects new vs updated entities (seen before but with new/changed data)
+#   - Retracts stale pairs for updated entities via O(degree) inverted index
+#   - Checks (new × existing) + (new × new) pairs
+#   - Re-evaluates retracted pairs with updated classifications
+#   - Merges results into EntityCache and PairTracker
+stats = _incremental.process_chunk(N, new_entities, pair_checker=check_pair)
+
+# Step 3: Get updated results (always current, no manual merging needed)
+pair_results = _incremental.pair_tracker.get_pairs()
+print(f"Chunk N: {stats['new_entities']} new, {stats['updated_entities']} updated, "
+      f"{stats['retracted_pairs']} retracted, {stats['total_pairs']} total pairs")
+```
+
+### What process_chunk() handles for you:
+- **Non-monotonic updates (retractions)**: If an entity appears in chunk 0 and again in chunk 2,
+  all its stale pairs are automatically retracted and re-evaluated. Handles "exactly one X"
+  conditions that can be invalidated by new data — no manual retraction logic needed.
+- **O(k·n) cost per chunk**: Only k new entities × n existing are checked, not O((n+k)²).
+- **Correctness guarantee**: After each chunk, `_incremental.pair_tracker.get_pairs()` contains
+  exactly the currently valid pairs.
+
+Think step by step, execute code immediately, and use `_incremental.process_chunk()` as your
+primary state management interface. Do NOT bypass it by maintaining your own entity_cache dict.
+"""
+)
+
 USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action:"""
 USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action:"""
 
@@ -131,6 +214,7 @@ def build_user_prompt(
     iteration: int = 0,
     context_count: int = 1,
     history_count: int = 0,
+    cached_vars: dict[str, str] | None = None,
 ) -> dict[str, str]:
     if iteration == 0:
         safeguard = "You have not interacted with the REPL environment or seen your prompt / context yet. Your next action should be to look through and figure out how to answer the prompt, so don't just provide a final answer yet.\n\n"
@@ -152,5 +236,14 @@ def build_user_prompt(
             prompt += "\n\nNote: You have 1 prior conversation history available in the `history` variable."
         else:
             prompt += f"\n\nNote: You have {history_count} prior conversation histories available (history_0 through history_{history_count - 1})."
+
+    # Incremental computation: inform the model about cached REPL state from prior turns
+    if cached_vars:
+        vars_desc = ", ".join(f"`{name}` ({vtype})" for name, vtype in cached_vars.items())
+        prompt += (
+            f"\n\n**INCREMENTAL STATE**: The REPL already contains variables from prior turns: {vars_desc}. "
+            f"You can use SHOW_VARS() to inspect them. Build on existing computations instead of re-computing from scratch. "
+            f"Only process NEW data (the latest context) and merge results with cached state."
+        )
 
     return {"role": "user", "content": prompt}

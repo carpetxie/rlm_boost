@@ -1,0 +1,1227 @@
+{
+  "4": {
+    "task_id": 4,
+    "num_chunks": 10,
+    "correctness": true,
+    "incremental": {
+      "pair_checks": 81578,
+      "entity_parses": 595,
+      "retractions": 2717,
+      "final_pairs": 990,
+      "total_time": 0.09565220901276916,
+      "per_chunk": [
+        {
+          "chunk_index": 0,
+          "new_entities": 61,
+          "updated_entities": 0,
+          "pair_checks": 1830,
+          "new_pairs": 36,
+          "retracted_pairs": 0,
+          "total_pairs": 36,
+          "total_entities": 61
+        },
+        {
+          "chunk_index": 1,
+          "new_entities": 37,
+          "updated_entities": 24,
+          "pair_checks": 4357,
+          "new_pairs": 132,
+          "retracted_pairs": 26,
+          "total_pairs": 120,
+          "total_entities": 98
+        },
+        {
+          "chunk_index": 2,
+          "new_entities": 23,
+          "updated_entities": 38,
+          "pair_checks": 6172,
+          "new_pairs": 111,
+          "retracted_pairs": 84,
+          "total_pairs": 136,
+          "total_entities": 121
+        },
+        {
+          "chunk_index": 3,
+          "new_entities": 22,
+          "updated_entities": 38,
+          "pair_checks": 7417,
+          "new_pairs": 290,
+          "retracted_pairs": 108,
+          "total_pairs": 276,
+          "total_entities": 143
+        },
+        {
+          "chunk_index": 4,
+          "new_entities": 11,
+          "updated_entities": 48,
+          "pair_checks": 8378,
+          "new_pairs": 515,
+          "retracted_pairs": 210,
+          "total_pairs": 465,
+          "total_entities": 154
+        },
+        {
+          "chunk_index": 5,
+          "new_entities": 14,
+          "updated_entities": 43,
+          "pair_checks": 8673,
+          "new_pairs": 404,
+          "retracted_pairs": 387,
+          "total_pairs": 465,
+          "total_entities": 168
+        },
+        {
+          "chunk_index": 6,
+          "new_entities": 13,
+          "updated_entities": 41,
+          "pair_checks": 9073,
+          "new_pairs": 391,
+          "retracted_pairs": 234,
+          "total_pairs": 595,
+          "total_entities": 181
+        },
+        {
+          "chunk_index": 7,
+          "new_entities": 14,
+          "updated_entities": 45,
+          "pair_checks": 10634,
+          "new_pairs": 632,
+          "retracted_pairs": 385,
+          "total_pairs": 780,
+          "total_entities": 195
+        },
+        {
+          "chunk_index": 8,
+          "new_entities": 20,
+          "updated_entities": 40,
+          "pair_checks": 11679,
+          "new_pairs": 732,
+          "retracted_pairs": 570,
+          "total_pairs": 903,
+          "total_entities": 215
+        },
+        {
+          "chunk_index": 9,
+          "new_entities": 16,
+          "updated_entities": 47,
+          "pair_checks": 13365,
+          "new_pairs": 823,
+          "retracted_pairs": 713,
+          "total_pairs": 990,
+          "total_entities": 231
+        }
+      ]
+    },
+    "full_recompute": {
+      "pair_checks": 134580,
+      "entity_parses": 1567,
+      "total_time": 0.16797212499659508
+    },
+    "savings": {
+      "pair_check_pct": 39.38,
+      "entity_parse_pct": 62.03
+    },
+    "chunk_details": [
+      {
+        "chunk": 1,
+        "new_entities": 61,
+        "updated_entities": 0,
+        "retracted_pairs": 0,
+        "incr_checks": 1830,
+        "full_checks": 1830,
+        "savings_pct": 0.0,
+        "incr_pairs": 36,
+        "full_pairs": 36,
+        "correct": true
+      },
+      {
+        "chunk": 2,
+        "new_entities": 37,
+        "updated_entities": 24,
+        "retracted_pairs": 26,
+        "incr_checks": 4357,
+        "full_checks": 4753,
+        "savings_pct": 8.3,
+        "incr_pairs": 120,
+        "full_pairs": 120,
+        "correct": true
+      },
+      {
+        "chunk": 3,
+        "new_entities": 23,
+        "updated_entities": 38,
+        "retracted_pairs": 84,
+        "incr_checks": 6172,
+        "full_checks": 7260,
+        "savings_pct": 15.0,
+        "incr_pairs": 136,
+        "full_pairs": 136,
+        "correct": true
+      },
+      {
+        "chunk": 4,
+        "new_entities": 22,
+        "updated_entities": 38,
+        "retracted_pairs": 108,
+        "incr_checks": 7417,
+        "full_checks": 10153,
+        "savings_pct": 26.9,
+        "incr_pairs": 276,
+        "full_pairs": 276,
+        "correct": true
+      },
+      {
+        "chunk": 5,
+        "new_entities": 11,
+        "updated_entities": 48,
+        "retracted_pairs": 210,
+        "incr_checks": 8378,
+        "full_checks": 11781,
+        "savings_pct": 28.9,
+        "incr_pairs": 465,
+        "full_pairs": 465,
+        "correct": true
+      },
+      {
+        "chunk": 6,
+        "new_entities": 14,
+        "updated_entities": 43,
+        "retracted_pairs": 387,
+        "incr_checks": 8673,
+        "full_checks": 14028,
+        "savings_pct": 38.2,
+        "incr_pairs": 465,
+        "full_pairs": 465,
+        "correct": true
+      },
+      {
+        "chunk": 7,
+        "new_entities": 13,
+        "updated_entities": 41,
+        "retracted_pairs": 234,
+        "incr_checks": 9073,
+        "full_checks": 16290,
+        "savings_pct": 44.3,
+        "incr_pairs": 595,
+        "full_pairs": 595,
+        "correct": true
+      },
+      {
+        "chunk": 8,
+        "new_entities": 14,
+        "updated_entities": 45,
+        "retracted_pairs": 385,
+        "incr_checks": 10634,
+        "full_checks": 18915,
+        "savings_pct": 43.8,
+        "incr_pairs": 780,
+        "full_pairs": 780,
+        "correct": true
+      },
+      {
+        "chunk": 9,
+        "new_entities": 20,
+        "updated_entities": 40,
+        "retracted_pairs": 570,
+        "incr_checks": 11679,
+        "full_checks": 23005,
+        "savings_pct": 49.2,
+        "incr_pairs": 903,
+        "full_pairs": 903,
+        "correct": true
+      },
+      {
+        "chunk": 10,
+        "new_entities": 16,
+        "updated_entities": 47,
+        "retracted_pairs": 713,
+        "incr_checks": 13365,
+        "full_checks": 26565,
+        "savings_pct": 49.7,
+        "incr_pairs": 990,
+        "full_pairs": 990,
+        "correct": true
+      }
+    ]
+  },
+  "5": {
+    "task_id": 5,
+    "num_chunks": 10,
+    "correctness": true,
+    "incremental": {
+      "pair_checks": 82371,
+      "entity_parses": 595,
+      "retractions": 90,
+      "final_pairs": 21,
+      "total_time": 0.08813258400186896,
+      "per_chunk": [
+        {
+          "chunk_index": 0,
+          "new_entities": 61,
+          "updated_entities": 0,
+          "pair_checks": 1830,
+          "new_pairs": 0,
+          "retracted_pairs": 0,
+          "total_pairs": 0,
+          "total_entities": 61
+        },
+        {
+          "chunk_index": 1,
+          "new_entities": 37,
+          "updated_entities": 24,
+          "pair_checks": 4363,
+          "new_pairs": 6,
+          "retracted_pairs": 0,
+          "total_pairs": 3,
+          "total_entities": 98
+        },
+        {
+          "chunk_index": 2,
+          "new_entities": 23,
+          "updated_entities": 38,
+          "pair_checks": 6192,
+          "new_pairs": 15,
+          "retracted_pairs": 3,
+          "total_pairs": 10,
+          "total_entities": 121
+        },
+        {
+          "chunk_index": 3,
+          "new_entities": 22,
+          "updated_entities": 38,
+          "pair_checks": 7452,
+          "new_pairs": 3,
+          "retracted_pairs": 7,
+          "total_pairs": 6,
+          "total_entities": 143
+        },
+        {
+          "chunk_index": 4,
+          "new_entities": 11,
+          "updated_entities": 48,
+          "pair_checks": 8441,
+          "new_pairs": 8,
+          "retracted_pairs": 6,
+          "total_pairs": 6,
+          "total_entities": 154
+        },
+        {
+          "chunk_index": 5,
+          "new_entities": 14,
+          "updated_entities": 43,
+          "pair_checks": 8823,
+          "new_pairs": 33,
+          "retracted_pairs": 6,
+          "total_pairs": 21,
+          "total_entities": 168
+        },
+        {
+          "chunk_index": 6,
+          "new_entities": 13,
+          "updated_entities": 41,
+          "pair_checks": 9099,
+          "new_pairs": 14,
+          "retracted_pairs": 20,
+          "total_pairs": 15,
+          "total_entities": 181
+        },
+        {
+          "chunk_index": 7,
+          "new_entities": 14,
+          "updated_entities": 45,
+          "pair_checks": 10719,
+          "new_pairs": 14,
+          "retracted_pairs": 14,
+          "total_pairs": 15,
+          "total_entities": 195
+        },
+        {
+          "chunk_index": 8,
+          "new_entities": 20,
+          "updated_entities": 40,
+          "pair_checks": 11844,
+          "new_pairs": 20,
+          "retracted_pairs": 14,
+          "total_pairs": 21,
+          "total_entities": 215
+        },
+        {
+          "chunk_index": 9,
+          "new_entities": 16,
+          "updated_entities": 47,
+          "pair_checks": 13608,
+          "new_pairs": 20,
+          "retracted_pairs": 20,
+          "total_pairs": 21,
+          "total_entities": 231
+        }
+      ]
+    },
+    "full_recompute": {
+      "pair_checks": 134580,
+      "entity_parses": 1567,
+      "total_time": 0.12061416497454047
+    },
+    "savings": {
+      "pair_check_pct": 38.79,
+      "entity_parse_pct": 62.03
+    },
+    "chunk_details": [
+      {
+        "chunk": 1,
+        "new_entities": 61,
+        "updated_entities": 0,
+        "retracted_pairs": 0,
+        "incr_checks": 1830,
+        "full_checks": 1830,
+        "savings_pct": 0.0,
+        "incr_pairs": 0,
+        "full_pairs": 0,
+        "correct": true
+      },
+      {
+        "chunk": 2,
+        "new_entities": 37,
+        "updated_entities": 24,
+        "retracted_pairs": 0,
+        "incr_checks": 4363,
+        "full_checks": 4753,
+        "savings_pct": 8.2,
+        "incr_pairs": 3,
+        "full_pairs": 3,
+        "correct": true
+      },
+      {
+        "chunk": 3,
+        "new_entities": 23,
+        "updated_entities": 38,
+        "retracted_pairs": 3,
+        "incr_checks": 6192,
+        "full_checks": 7260,
+        "savings_pct": 14.7,
+        "incr_pairs": 10,
+        "full_pairs": 10,
+        "correct": true
+      },
+      {
+        "chunk": 4,
+        "new_entities": 22,
+        "updated_entities": 38,
+        "retracted_pairs": 7,
+        "incr_checks": 7452,
+        "full_checks": 10153,
+        "savings_pct": 26.6,
+        "incr_pairs": 6,
+        "full_pairs": 6,
+        "correct": true
+      },
+      {
+        "chunk": 5,
+        "new_entities": 11,
+        "updated_entities": 48,
+        "retracted_pairs": 6,
+        "incr_checks": 8441,
+        "full_checks": 11781,
+        "savings_pct": 28.4,
+        "incr_pairs": 6,
+        "full_pairs": 6,
+        "correct": true
+      },
+      {
+        "chunk": 6,
+        "new_entities": 14,
+        "updated_entities": 43,
+        "retracted_pairs": 6,
+        "incr_checks": 8823,
+        "full_checks": 14028,
+        "savings_pct": 37.1,
+        "incr_pairs": 21,
+        "full_pairs": 21,
+        "correct": true
+      },
+      {
+        "chunk": 7,
+        "new_entities": 13,
+        "updated_entities": 41,
+        "retracted_pairs": 20,
+        "incr_checks": 9099,
+        "full_checks": 16290,
+        "savings_pct": 44.1,
+        "incr_pairs": 15,
+        "full_pairs": 15,
+        "correct": true
+      },
+      {
+        "chunk": 8,
+        "new_entities": 14,
+        "updated_entities": 45,
+        "retracted_pairs": 14,
+        "incr_checks": 10719,
+        "full_checks": 18915,
+        "savings_pct": 43.3,
+        "incr_pairs": 15,
+        "full_pairs": 15,
+        "correct": true
+      },
+      {
+        "chunk": 9,
+        "new_entities": 20,
+        "updated_entities": 40,
+        "retracted_pairs": 14,
+        "incr_checks": 11844,
+        "full_checks": 23005,
+        "savings_pct": 48.5,
+        "incr_pairs": 21,
+        "full_pairs": 21,
+        "correct": true
+      },
+      {
+        "chunk": 10,
+        "new_entities": 16,
+        "updated_entities": 47,
+        "retracted_pairs": 20,
+        "incr_checks": 13608,
+        "full_checks": 26565,
+        "savings_pct": 48.8,
+        "incr_pairs": 21,
+        "full_pairs": 21,
+        "correct": true
+      }
+    ]
+  },
+  "7": {
+    "task_id": 7,
+    "num_chunks": 10,
+    "correctness": true,
+    "incremental": {
+      "pair_checks": 81484,
+      "entity_parses": 595,
+      "retractions": 3801,
+      "final_pairs": 1485,
+      "total_time": 0.11333824880421162,
+      "per_chunk": [
+        {
+          "chunk_index": 0,
+          "new_entities": 61,
+          "updated_entities": 0,
+          "pair_checks": 1830,
+          "new_pairs": 66,
+          "retracted_pairs": 0,
+          "total_pairs": 66,
+          "total_entities": 61
+        },
+        {
+          "chunk_index": 1,
+          "new_entities": 37,
+          "updated_entities": 24,
+          "pair_checks": 4362,
+          "new_pairs": 113,
+          "retracted_pairs": 21,
+          "total_pairs": 153,
+          "total_entities": 98
+        },
+        {
+          "chunk_index": 2,
+          "new_entities": 23,
+          "updated_entities": 38,
+          "pair_checks": 6148,
+          "new_pairs": 318,
+          "retracted_pairs": 125,
+          "total_pairs": 300,
+          "total_entities": 121
+        },
+        {
+          "chunk_index": 3,
+          "new_entities": 22,
+          "updated_entities": 38,
+          "pair_checks": 7408,
+          "new_pairs": 636,
+          "retracted_pairs": 195,
+          "total_pairs": 666,
+          "total_entities": 143
+        },
+        {
+          "chunk_index": 4,
+          "new_entities": 11,
+          "updated_entities": 48,
+          "pair_checks": 8339,
+          "new_pairs": 449,
+          "retracted_pairs": 435,
+          "total_pairs": 666,
+          "total_entities": 154
+        },
+        {
+          "chunk_index": 5,
+          "new_entities": 14,
+          "updated_entities": 43,
+          "pair_checks": 8760,
+          "new_pairs": 477,
+          "retracted_pairs": 366,
+          "total_pairs": 741,
+          "total_entities": 168
+        },
+        {
+          "chunk_index": 6,
+          "new_entities": 13,
+          "updated_entities": 41,
+          "pair_checks": 9018,
+          "new_pairs": 615,
+          "retracted_pairs": 441,
+          "total_pairs": 861,
+          "total_entities": 181
+        },
+        {
+          "chunk_index": 7,
+          "new_entities": 14,
+          "updated_entities": 45,
+          "pair_checks": 10535,
+          "new_pairs": 955,
+          "retracted_pairs": 630,
+          "total_pairs": 1081,
+          "total_entities": 195
+        },
+        {
+          "chunk_index": 8,
+          "new_entities": 20,
+          "updated_entities": 40,
+          "pair_checks": 11697,
+          "new_pairs": 1026,
+          "retracted_pairs": 675,
+          "total_pairs": 1378,
+          "total_entities": 215
+        },
+        {
+          "chunk_index": 9,
+          "new_entities": 16,
+          "updated_entities": 47,
+          "pair_checks": 13387,
+          "new_pairs": 1083,
+          "retracted_pairs": 913,
+          "total_pairs": 1485,
+          "total_entities": 231
+        }
+      ]
+    },
+    "full_recompute": {
+      "pair_checks": 134580,
+      "entity_parses": 1567,
+      "total_time": 0.14612254092935473
+    },
+    "savings": {
+      "pair_check_pct": 39.45,
+      "entity_parse_pct": 62.03
+    },
+    "chunk_details": [
+      {
+        "chunk": 1,
+        "new_entities": 61,
+        "updated_entities": 0,
+        "retracted_pairs": 0,
+        "incr_checks": 1830,
+        "full_checks": 1830,
+        "savings_pct": 0.0,
+        "incr_pairs": 66,
+        "full_pairs": 66,
+        "correct": true
+      },
+      {
+        "chunk": 2,
+        "new_entities": 37,
+        "updated_entities": 24,
+        "retracted_pairs": 21,
+        "incr_checks": 4362,
+        "full_checks": 4753,
+        "savings_pct": 8.2,
+        "incr_pairs": 153,
+        "full_pairs": 153,
+        "correct": true
+      },
+      {
+        "chunk": 3,
+        "new_entities": 23,
+        "updated_entities": 38,
+        "retracted_pairs": 125,
+        "incr_checks": 6148,
+        "full_checks": 7260,
+        "savings_pct": 15.3,
+        "incr_pairs": 300,
+        "full_pairs": 300,
+        "correct": true
+      },
+      {
+        "chunk": 4,
+        "new_entities": 22,
+        "updated_entities": 38,
+        "retracted_pairs": 195,
+        "incr_checks": 7408,
+        "full_checks": 10153,
+        "savings_pct": 27.0,
+        "incr_pairs": 666,
+        "full_pairs": 666,
+        "correct": true
+      },
+      {
+        "chunk": 5,
+        "new_entities": 11,
+        "updated_entities": 48,
+        "retracted_pairs": 435,
+        "incr_checks": 8339,
+        "full_checks": 11781,
+        "savings_pct": 29.2,
+        "incr_pairs": 666,
+        "full_pairs": 666,
+        "correct": true
+      },
+      {
+        "chunk": 6,
+        "new_entities": 14,
+        "updated_entities": 43,
+        "retracted_pairs": 366,
+        "incr_checks": 8760,
+        "full_checks": 14028,
+        "savings_pct": 37.6,
+        "incr_pairs": 741,
+        "full_pairs": 741,
+        "correct": true
+      },
+      {
+        "chunk": 7,
+        "new_entities": 13,
+        "updated_entities": 41,
+        "retracted_pairs": 441,
+        "incr_checks": 9018,
+        "full_checks": 16290,
+        "savings_pct": 44.6,
+        "incr_pairs": 861,
+        "full_pairs": 861,
+        "correct": true
+      },
+      {
+        "chunk": 8,
+        "new_entities": 14,
+        "updated_entities": 45,
+        "retracted_pairs": 630,
+        "incr_checks": 10535,
+        "full_checks": 18915,
+        "savings_pct": 44.3,
+        "incr_pairs": 1081,
+        "full_pairs": 1081,
+        "correct": true
+      },
+      {
+        "chunk": 9,
+        "new_entities": 20,
+        "updated_entities": 40,
+        "retracted_pairs": 675,
+        "incr_checks": 11697,
+        "full_checks": 23005,
+        "savings_pct": 49.2,
+        "incr_pairs": 1378,
+        "full_pairs": 1378,
+        "correct": true
+      },
+      {
+        "chunk": 10,
+        "new_entities": 16,
+        "updated_entities": 47,
+        "retracted_pairs": 913,
+        "incr_checks": 13387,
+        "full_checks": 26565,
+        "savings_pct": 49.6,
+        "incr_pairs": 1485,
+        "full_pairs": 1485,
+        "correct": true
+      }
+    ]
+  },
+  "9": {
+    "task_id": 9,
+    "num_chunks": 10,
+    "correctness": true,
+    "incremental": {
+      "pair_checks": 81850,
+      "entity_parses": 595,
+      "retractions": 2409,
+      "final_pairs": 741,
+      "total_time": 0.09940316714346409,
+      "per_chunk": [
+        {
+          "chunk_index": 0,
+          "new_entities": 61,
+          "updated_entities": 0,
+          "pair_checks": 1830,
+          "new_pairs": 66,
+          "retracted_pairs": 0,
+          "total_pairs": 66,
+          "total_entities": 61
+        },
+        {
+          "chunk_index": 1,
+          "new_entities": 37,
+          "updated_entities": 24,
+          "pair_checks": 4362,
+          "new_pairs": 113,
+          "retracted_pairs": 21,
+          "total_pairs": 153,
+          "total_entities": 98
+        },
+        {
+          "chunk_index": 2,
+          "new_entities": 23,
+          "updated_entities": 38,
+          "pair_checks": 6172,
+          "new_pairs": 290,
+          "retracted_pairs": 98,
+          "total_pairs": 300,
+          "total_entities": 121
+        },
+        {
+          "chunk_index": 3,
+          "new_entities": 22,
+          "updated_entities": 38,
+          "pair_checks": 7408,
+          "new_pairs": 390,
+          "retracted_pairs": 195,
+          "total_pairs": 435,
+          "total_entities": 143
+        },
+        {
+          "chunk_index": 4,
+          "new_entities": 11,
+          "updated_entities": 48,
+          "pair_checks": 8324,
+          "new_pairs": 371,
+          "retracted_pairs": 344,
+          "total_pairs": 435,
+          "total_entities": 154
+        },
+        {
+          "chunk_index": 5,
+          "new_entities": 14,
+          "updated_entities": 43,
+          "pair_checks": 8771,
+          "new_pairs": 474,
+          "retracted_pairs": 264,
+          "total_pairs": 595,
+          "total_entities": 168
+        },
+        {
+          "chunk_index": 6,
+          "new_entities": 13,
+          "updated_entities": 41,
+          "pair_checks": 9054,
+          "new_pairs": 319,
+          "retracted_pairs": 319,
+          "total_pairs": 595,
+          "total_entities": 181
+        },
+        {
+          "chunk_index": 7,
+          "new_entities": 14,
+          "updated_entities": 45,
+          "pair_checks": 10680,
+          "new_pairs": 433,
+          "retracted_pairs": 295,
+          "total_pairs": 703,
+          "total_entities": 195
+        },
+        {
+          "chunk_index": 8,
+          "new_entities": 20,
+          "updated_entities": 40,
+          "pair_checks": 11784,
+          "new_pairs": 350,
+          "retracted_pairs": 378,
+          "total_pairs": 666,
+          "total_entities": 215
+        },
+        {
+          "chunk_index": 9,
+          "new_entities": 16,
+          "updated_entities": 47,
+          "pair_checks": 13465,
+          "new_pairs": 624,
+          "retracted_pairs": 495,
+          "total_pairs": 741,
+          "total_entities": 231
+        }
+      ]
+    },
+    "full_recompute": {
+      "pair_checks": 134580,
+      "entity_parses": 1567,
+      "total_time": 0.13641950185410678
+    },
+    "savings": {
+      "pair_check_pct": 39.18,
+      "entity_parse_pct": 62.03
+    },
+    "chunk_details": [
+      {
+        "chunk": 1,
+        "new_entities": 61,
+        "updated_entities": 0,
+        "retracted_pairs": 0,
+        "incr_checks": 1830,
+        "full_checks": 1830,
+        "savings_pct": 0.0,
+        "incr_pairs": 66,
+        "full_pairs": 66,
+        "correct": true
+      },
+      {
+        "chunk": 2,
+        "new_entities": 37,
+        "updated_entities": 24,
+        "retracted_pairs": 21,
+        "incr_checks": 4362,
+        "full_checks": 4753,
+        "savings_pct": 8.2,
+        "incr_pairs": 153,
+        "full_pairs": 153,
+        "correct": true
+      },
+      {
+        "chunk": 3,
+        "new_entities": 23,
+        "updated_entities": 38,
+        "retracted_pairs": 98,
+        "incr_checks": 6172,
+        "full_checks": 7260,
+        "savings_pct": 15.0,
+        "incr_pairs": 300,
+        "full_pairs": 300,
+        "correct": true
+      },
+      {
+        "chunk": 4,
+        "new_entities": 22,
+        "updated_entities": 38,
+        "retracted_pairs": 195,
+        "incr_checks": 7408,
+        "full_checks": 10153,
+        "savings_pct": 27.0,
+        "incr_pairs": 435,
+        "full_pairs": 435,
+        "correct": true
+      },
+      {
+        "chunk": 5,
+        "new_entities": 11,
+        "updated_entities": 48,
+        "retracted_pairs": 344,
+        "incr_checks": 8324,
+        "full_checks": 11781,
+        "savings_pct": 29.3,
+        "incr_pairs": 435,
+        "full_pairs": 435,
+        "correct": true
+      },
+      {
+        "chunk": 6,
+        "new_entities": 14,
+        "updated_entities": 43,
+        "retracted_pairs": 264,
+        "incr_checks": 8771,
+        "full_checks": 14028,
+        "savings_pct": 37.5,
+        "incr_pairs": 595,
+        "full_pairs": 595,
+        "correct": true
+      },
+      {
+        "chunk": 7,
+        "new_entities": 13,
+        "updated_entities": 41,
+        "retracted_pairs": 319,
+        "incr_checks": 9054,
+        "full_checks": 16290,
+        "savings_pct": 44.4,
+        "incr_pairs": 595,
+        "full_pairs": 595,
+        "correct": true
+      },
+      {
+        "chunk": 8,
+        "new_entities": 14,
+        "updated_entities": 45,
+        "retracted_pairs": 295,
+        "incr_checks": 10680,
+        "full_checks": 18915,
+        "savings_pct": 43.5,
+        "incr_pairs": 703,
+        "full_pairs": 703,
+        "correct": true
+      },
+      {
+        "chunk": 9,
+        "new_entities": 20,
+        "updated_entities": 40,
+        "retracted_pairs": 378,
+        "incr_checks": 11784,
+        "full_checks": 23005,
+        "savings_pct": 48.8,
+        "incr_pairs": 666,
+        "full_pairs": 666,
+        "correct": true
+      },
+      {
+        "chunk": 10,
+        "new_entities": 16,
+        "updated_entities": 47,
+        "retracted_pairs": 495,
+        "incr_checks": 13465,
+        "full_checks": 26565,
+        "savings_pct": 49.3,
+        "incr_pairs": 741,
+        "full_pairs": 741,
+        "correct": true
+      }
+    ]
+  },
+  "10": {
+    "task_id": 10,
+    "num_chunks": 10,
+    "correctness": true,
+    "incremental": {
+      "pair_checks": 82244,
+      "entity_parses": 595,
+      "retractions": 756,
+      "final_pairs": 190,
+      "total_time": 0.09366337605752051,
+      "per_chunk": [
+        {
+          "chunk_index": 0,
+          "new_entities": 61,
+          "updated_entities": 0,
+          "pair_checks": 1830,
+          "new_pairs": 3,
+          "retracted_pairs": 0,
+          "total_pairs": 3,
+          "total_entities": 61
+        },
+        {
+          "chunk_index": 1,
+          "new_entities": 37,
+          "updated_entities": 24,
+          "pair_checks": 4362,
+          "new_pairs": 98,
+          "retracted_pairs": 3,
+          "total_pairs": 78,
+          "total_entities": 98
+        },
+        {
+          "chunk_index": 2,
+          "new_entities": 23,
+          "updated_entities": 38,
+          "pair_checks": 6178,
+          "new_pairs": 117,
+          "retracted_pairs": 57,
+          "total_pairs": 120,
+          "total_entities": 121
+        },
+        {
+          "chunk_index": 3,
+          "new_entities": 22,
+          "updated_entities": 38,
+          "pair_checks": 7432,
+          "new_pairs": 72,
+          "retracted_pairs": 84,
+          "total_pairs": 105,
+          "total_entities": 143
+        },
+        {
+          "chunk_index": 4,
+          "new_entities": 11,
+          "updated_entities": 48,
+          "pair_checks": 8423,
+          "new_pairs": 167,
+          "retracted_pairs": 77,
+          "total_pairs": 171,
+          "total_entities": 154
+        },
+        {
+          "chunk_index": 5,
+          "new_entities": 14,
+          "updated_entities": 43,
+          "pair_checks": 8790,
+          "new_pairs": 137,
+          "retracted_pairs": 126,
+          "total_pairs": 171,
+          "total_entities": 168
+        },
+        {
+          "chunk_index": 6,
+          "new_entities": 13,
+          "updated_entities": 41,
+          "pair_checks": 9099,
+          "new_pairs": 80,
+          "retracted_pairs": 80,
+          "total_pairs": 171,
+          "total_entities": 181
+        },
+        {
+          "chunk_index": 7,
+          "new_entities": 14,
+          "updated_entities": 45,
+          "pair_checks": 10704,
+          "new_pairs": 142,
+          "retracted_pairs": 105,
+          "total_pairs": 190,
+          "total_entities": 195
+        },
+        {
+          "chunk_index": 8,
+          "new_entities": 20,
+          "updated_entities": 40,
+          "pair_checks": 11829,
+          "new_pairs": 112,
+          "retracted_pairs": 112,
+          "total_pairs": 190,
+          "total_entities": 215
+        },
+        {
+          "chunk_index": 9,
+          "new_entities": 16,
+          "updated_entities": 47,
+          "pair_checks": 13597,
+          "new_pairs": 112,
+          "retracted_pairs": 112,
+          "total_pairs": 190,
+          "total_entities": 231
+        }
+      ]
+    },
+    "full_recompute": {
+      "pair_checks": 134580,
+      "entity_parses": 1567,
+      "total_time": 0.1316902079852298
+    },
+    "savings": {
+      "pair_check_pct": 38.89,
+      "entity_parse_pct": 62.03
+    },
+    "chunk_details": [
+      {
+        "chunk": 1,
+        "new_entities": 61,
+        "updated_entities": 0,
+        "retracted_pairs": 0,
+        "incr_checks": 1830,
+        "full_checks": 1830,
+        "savings_pct": 0.0,
+        "incr_pairs": 3,
+        "full_pairs": 3,
+        "correct": true
+      },
+      {
+        "chunk": 2,
+        "new_entities": 37,
+        "updated_entities": 24,
+        "retracted_pairs": 3,
+        "incr_checks": 4362,
+        "full_checks": 4753,
+        "savings_pct": 8.2,
+        "incr_pairs": 78,
+        "full_pairs": 78,
+        "correct": true
+      },
+      {
+        "chunk": 3,
+        "new_entities": 23,
+        "updated_entities": 38,
+        "retracted_pairs": 57,
+        "incr_checks": 6178,
+        "full_checks": 7260,
+        "savings_pct": 14.9,
+        "incr_pairs": 120,
+        "full_pairs": 120,
+        "correct": true
+      },
+      {
+        "chunk": 4,
+        "new_entities": 22,
+        "updated_entities": 38,
+        "retracted_pairs": 84,
+        "incr_checks": 7432,
+        "full_checks": 10153,
+        "savings_pct": 26.8,
+        "incr_pairs": 105,
+        "full_pairs": 105,
+        "correct": true
+      },
+      {
+        "chunk": 5,
+        "new_entities": 11,
+        "updated_entities": 48,
+        "retracted_pairs": 77,
+        "incr_checks": 8423,
+        "full_checks": 11781,
+        "savings_pct": 28.5,
+        "incr_pairs": 171,
+        "full_pairs": 171,
+        "correct": true
+      },
+      {
+        "chunk": 6,
+        "new_entities": 14,
+        "updated_entities": 43,
+        "retracted_pairs": 126,
+        "incr_checks": 8790,
+        "full_checks": 14028,
+        "savings_pct": 37.3,
+        "incr_pairs": 171,
+        "full_pairs": 171,
+        "correct": true
+      },
+      {
+        "chunk": 7,
+        "new_entities": 13,
+        "updated_entities": 41,
+        "retracted_pairs": 80,
+        "incr_checks": 9099,
+        "full_checks": 16290,
+        "savings_pct": 44.1,
+        "incr_pairs": 171,
+        "full_pairs": 171,
+        "correct": true
+      },
+      {
+        "chunk": 8,
+        "new_entities": 14,
+        "updated_entities": 45,
+        "retracted_pairs": 105,
+        "incr_checks": 10704,
+        "full_checks": 18915,
+        "savings_pct": 43.4,
+        "incr_pairs": 190,
+        "full_pairs": 190,
+        "correct": true
+      },
+      {
+        "chunk": 9,
+        "new_entities": 20,
+        "updated_entities": 40,
+        "retracted_pairs": 112,
+        "incr_checks": 11829,
+        "full_checks": 23005,
+        "savings_pct": 48.6,
+        "incr_pairs": 190,
+        "full_pairs": 190,
+        "correct": true
+      },
+      {
+        "chunk": 10,
+        "new_entities": 16,
+        "updated_entities": 47,
+        "retracted_pairs": 112,
+        "incr_checks": 13597,
+        "full_checks": 26565,
+        "savings_pct": 48.8,
+        "incr_pairs": 190,
+        "full_pairs": 190,
+        "correct": true
+      }
+    ]
+  }
+}

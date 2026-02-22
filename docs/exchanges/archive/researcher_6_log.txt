@@ -1,0 +1,31 @@
+All tasks are complete. Here is a comprehensive summary of everything accomplished in Iteration 6:
+
+---
+
+## Iteration 6 Summary
+
+### The Big One: Live API Experiment Finally Run
+
+After 5 consecutive deferrals, the live API experiment ran. **gpt-4o-mini achieves 100% protocol compliance** (calls `process_chunk` on all Turn 2+ responses) and **0% re-read rate** (never references prior raw context). Contribution framing: **EMPIRICAL SYSTEM**. The incremental computation protocol is LLM-zero-shot-followable.
+
+**Token split surprise**: Actual Turn 1/Turn 2+ split is 13%/87% — inverted from the 78/22 assumption, because the 78/22 finding was about sub-LM vs. root-LM proportions in the OOLONG benchmark, not per-turn chat accumulation. These require separate analysis.
+
+---
+
+### All Three Critical Bugs Fixed
+
+1. **Role-ordering defect** in `_prune_with_summary`: Fixed. Summary now correctly appears as `"role": "assistant"` (model's prior computation), not `"role": "user"`. All 12 integration tests pass.
+
+2. **σ model sign inconsistency**: Fixed. Reparameterized from `c*σ*(1-d/k)` (d negative) to `c*σ*(1+e/k)` (e positive, bounds enforced). R²=0.9363 unchanged. Paper formula: `savings(k,σ) = 51.1·(1-2.93/k) + 8.9·σ·(1+1.60/k)`, all parameters ≥ 0.
+
+3. **O(u·n) complexity**: Documented in `process_chunk()` docstring. True complexity is O((k+u)·n) per chunk.
+
+---
+
+### New Publishable Findings
+
+**Update-Rate Applicability Region**: Savings degrade linearly at ~3.75pp per 5% update rate. Break-even at p≈20% (low-σ tasks) to p≈30% (high-σ tasks). Produces a practitioner-ready "applicability region" figure.
+
+**Cross-N Validity Condition**: The savings formula requires *uniform entity arrival across chunks* (not just large N). At N=100 (subsampled, front-loaded arrival), savings collapse due to high update rates — the same O(u·n) mechanism.
+
+**Lazy Retraction Safety Condition** (`docs/lazy_retraction_analysis.md`): Monotone validity is the safety criterion. "Before DATE" tasks (1.3% bidirectional) are safe for lazy retraction; "After DATE" tasks (10.4% bidirectional) are not. Paper-and-pencil analysis complete.

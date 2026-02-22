@@ -1,0 +1,33 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key findings:
+
+---
+
+## Critique — Iteration 5 Summary
+
+**Overall**: Solid Iteration 4 progress (mock-LM tests, temporal sweep, cost model), but a newly discovered **abstraction conflict** in `INCREMENTAL_SYSTEM_PROMPT` is now the critical blocker.
+
+### The Central Issue
+`INCREMENTAL_SYSTEM_PROMPT` tells the model to use `entity_cache = {}` (a plain Python dict), while the REPL injects `_incremental.entity_cache` (an `EntityCache` with retraction support). A real LLM following the prompt literally will bypass all retraction primitives. This must be fixed before the live experiment — otherwise we'd be testing the wrong interface.
+
+### Scores
+| Criterion | Score | Δ |
+|-----------|-------|---|
+| Novelty | 7/10 | +1 |
+| Technical Soundness | **6/10** | **-1** (prompt/primitive conflict) |
+| Benchmark Performance | 6/10 | +0 |
+| Scalability | 5/10 | +0 |
+| Research Maturity | 6/10 | +1 |
+
+### The One Big Thing
+Fix `INCREMENTAL_SYSTEM_PROMPT` → update mock-LM tests → run real API experiment. This is a gate: the live experiment is meaningless until the prompt uses `_incremental.process_chunk()` as the sole interface.
+
+### Key Code Issues
+1. `INCREMENTAL_SYSTEM_PROMPT` instructs `entity_cache = {}` dict, bypassing retraction primitives
+2. `execute_code` silently drops `_incremental` reassignments (line 380, underscore filter)
+3. `savings(k, σ)` notation in research log — σ isn't in any fitted formula
+4. `_build_iteration_summary` uses brittle `"="` heuristic instead of `ast.parse()`
+
+### Quick Wins (5 min each, zero code change)
+- k=4 simulation (validate break-even claim)
+- 3-chunk temporal sweep (complete cost model dataset)
+- Per-entity retraction frequency analysis (mechanistic validation of 49x asymmetry)

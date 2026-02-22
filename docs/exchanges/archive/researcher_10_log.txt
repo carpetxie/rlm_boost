@@ -1,0 +1,13 @@
+The experiment completed cleanly with exit code 0. All results are confirmed and match what we analyzed earlier. The complete output shows:
+
+**Experiment bab862f — Completed Successfully ✓**
+
+Full results for the label-aware check_pair experiment (Task 1):
+
+| Condition | F1 | Precision | Recall | Input Tokens |
+|-----------|-----|-----------|--------|-------------|
+| A: Incremental (k=5, labeled) | **0.1695** | **1.0** | 0.0926 | 74,503 |
+| B: Baseline (1T, 5K, labeled) | **0.0193** | **1.0** | 0.0097 | 3,939 |
+| C: Oracle (1T, 25K, labeled) | **0.3424** | **1.0** | 0.2066 | 26,394 |
+
+The prune_count telemetry is confirmed live: `[0, 0, 0, 1, 1]` — pruning fired precisely at Turn 4, matching the 45,275-token spike in that turn. Both the `_prune_count` direct access and `get_stats()` agree, confirming the Iteration 9 fix was correctly applied. The results are saved to `results/streaming/label_aware_task1_results.json`.

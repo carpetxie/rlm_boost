@@ -1,0 +1,200 @@
+{
+  "task_idx": 1,
+  "model": "gpt-4o-mini",
+  "gold_pairs_count": 8001,
+  "check_pair_type": "label_aware",
+  "qualifying_labels": [
+    "numeric value",
+    "location"
+  ],
+  "iteration": 10,
+  "condition_a": {
+    "condition": "A_incremental_label_aware",
+    "task_idx": 1,
+    "model": "gpt-4o-mini",
+    "num_chunks": 5,
+    "max_chunk_chars": 5000,
+    "context_type": "labeled",
+    "check_pair_type": "label_aware",
+    "qualifying_labels": [
+      "numeric value",
+      "location"
+    ],
+    "compliance_rate": 0.8,
+    "f1_progression": [
+      {
+        "chunk": 1,
+        "chunk_idx": 0,
+        "compliant": true,
+        "chunks_processed": 2,
+        "pairs": 91,
+        "pair_checks_total": 1907,
+        "f1": 0.0225,
+        "precision": 1.0,
+        "recall": 0.0114,
+        "tp": 91,
+        "fp": 0,
+        "fn": 7910,
+        "input_tokens": 16039,
+        "output_tokens": 2126,
+        "elapsed_sec": 38.31,
+        "prune_count": 0
+      },
+      {
+        "chunk": 2,
+        "chunk_idx": 1,
+        "compliant": false,
+        "chunks_processed": 2,
+        "pairs": 91,
+        "pair_checks_total": 1907,
+        "f1": 0.0225,
+        "precision": 1.0,
+        "recall": 0.0114,
+        "tp": 91,
+        "fp": 0,
+        "fn": 7910,
+        "input_tokens": 1806,
+        "output_tokens": 770,
+        "elapsed_sec": 13.06,
+        "prune_count": 0
+      },
+      {
+        "chunk": 3,
+        "chunk_idx": 2,
+        "compliant": true,
+        "chunks_processed": 3,
+        "pairs": 210,
+        "pair_checks_total": 3345,
+        "f1": 0.0512,
+        "precision": 1.0,
+        "recall": 0.0262,
+        "tp": 210,
+        "fp": 0,
+        "fn": 7791,
+        "input_tokens": 4564,
+        "output_tokens": 670,
+        "elapsed_sec": 11.55,
+        "prune_count": 0
+      },
+      {
+        "chunk": 4,
+        "chunk_idx": 3,
+        "compliant": true,
+        "chunks_processed": 4,
+        "pairs": 406,
+        "pair_checks_total": 5622,
+        "f1": 0.0966,
+        "precision": 1.0,
+        "recall": 0.0507,
+        "tp": 406,
+        "fp": 0,
+        "fn": 7595,
+        "input_tokens": 45275,
+        "output_tokens": 4872,
+        "elapsed_sec": 80.29,
+        "prune_count": 1
+      },
+      {
+        "chunk": 5,
+        "chunk_idx": 4,
+        "compliant": true,
+        "chunks_processed": 5,
+        "pairs": 741,
+        "pair_checks_total": 8569,
+        "f1": 0.1695,
+        "precision": 1.0,
+        "recall": 0.0926,
+        "tp": 741,
+        "fp": 0,
+        "fn": 7260,
+        "input_tokens": 6819,
+        "output_tokens": 1211,
+        "elapsed_sec": 20.59,
+        "prune_count": 1
+      }
+    ],
+    "final_f1": 0.1695,
+    "final_precision": 1.0,
+    "final_recall": 0.0926,
+    "total_input_tokens": 74503,
+    "total_output_tokens": 9649,
+    "per_turn_tokens": [
+      {
+        "turn": 1,
+        "input": 16039,
+        "output": 2126
+      },
+      {
+        "turn": 2,
+        "input": 1806,
+        "output": 770
+      },
+      {
+        "turn": 3,
+        "input": 4564,
+        "output": 670
+      },
+      {
+        "turn": 4,
+        "input": 45275,
+        "output": 4872
+      },
+      {
+        "turn": 5,
+        "input": 6819,
+        "output": 1211
+      }
+    ]
+  },
+  "condition_b": {
+    "condition": "B_matched_budget_label_aware",
+    "task_idx": 1,
+    "model": "gpt-4o-mini",
+    "context_chars": 5000,
+    "context_type": "labeled",
+    "check_pair_type": "label_aware",
+    "qualifying_labels": [
+      "numeric value",
+      "location"
+    ],
+    "compliant": true,
+    "chunks_processed": 1,
+    "pair_checks": 595,
+    "f1": 0.0193,
+    "precision": 1.0,
+    "recall": 0.0097,
+    "tp": 78,
+    "fp": 0,
+    "fn": 7923,
+    "predicted_pairs": 78,
+    "gold_pairs": 8001,
+    "input_tokens": 3939,
+    "output_tokens": 584,
+    "elapsed_sec": 11.55
+  },
+  "condition_c": {
+    "condition": "C_oracle_label_aware",
+    "task_idx": 1,
+    "model": "gpt-4o-mini",
+    "context_chars": 25000,
+    "context_type": "labeled",
+    "check_pair_type": "label_aware",
+    "qualifying_labels": [
+      "numeric value",
+      "location"
+    ],
+    "entities_found": 113,
+    "qualifying_entities": 58,
+    "f1": 0.3424,
+    "precision": 1.0,
+    "recall": 0.2066,
+    "tp": 1653,
+    "fp": 0,
+    "fn": 6348,
+    "predicted_pairs": 1653,
+    "gold_pairs": 8001,
+    "input_tokens": 26394,
+    "output_tokens": 2455,
+    "elapsed_sec": 43.16
+  }
+}

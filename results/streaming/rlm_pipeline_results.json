@@ -1,0 +1,109 @@
+{
+  "model": "gpt-4o-mini",
+  "task_idx": 1,
+  "num_chunks": 3,
+  "max_chunk_chars": 4000,
+  "gold_pairs_count": 8001,
+  "execution_compliance_rate": 1.0,
+  "compliant_turns": 3,
+  "total_turns": 3,
+  "error_turns": 0,
+  "f1": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "tp": 0,
+    "fp": 3321,
+    "fn": 8001,
+    "predicted_pairs": 3321,
+    "gold_pairs": 8001
+  },
+  "final_pair_results_count": 3321,
+  "token_analysis": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "per_turn": [
+      {
+        "turn": 1,
+        "input": 0,
+        "output": 0
+      },
+      {
+        "turn": 2,
+        "input": 0,
+        "output": 0
+      },
+      {
+        "turn": 3,
+        "input": 0,
+        "output": 0
+      }
+    ]
+  },
+  "framing": "COMPLIANCE_OK_ACCURACY_LOW",
+  "turn_results": [
+    {
+      "turn": 1,
+      "chunk_idx": 0,
+      "chunk_chars": 4000,
+      "elapsed_sec": 19.77,
+      "response_preview": "Error: Variable 'pair_results' not found. Available variables: ['EntityCache', 'PairTracker', 'IncrementalState', 'f', 'context_0', 'context', 'check_pair', 'entities', 'line', 'parts', 'user_id', 'instance']. You must create and assign a variable BEFORE calling FINAL_VAR on it.",
+      "execution_compliance": {
+        "turn": 0,
+        "compliant": true,
+        "chunks_processed": 1,
+        "error": null,
+        "pair_results_exists": false,
+        "total_pairs": 903,
+        "total_retractions": 0,
+        "pair_checks": 0,
+        "pair_results_count": 0
+      },
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "is_final_chunk": false
+    },
+    {
+      "turn": 2,
+      "chunk_idx": 1,
+      "chunk_chars": 4000,
+      "elapsed_sec": 13.06,
+      "response_preview": "Error: Variable 'pair_results' not found. Available variables: ['EntityCache', 'PairTracker', 'IncrementalState', 'f', 'context_0', 'context', 'check_pair', 'entities', 'line', 'parts', 'user_id', 'instance', 'history_0', 'history', 'context_1']. You must create and assign a variable BEFORE calling ",
+      "execution_compliance": {
+        "turn": 1,
+        "compliant": true,
+        "chunks_processed": 2,
+        "error": null,
+        "pair_results_exists": false,
+        "total_pairs": 820,
+        "total_retractions": 83,
+        "pair_checks": 0,
+        "pair_results_count": 0
+      },
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "is_final_chunk": false
+    },
+    {
+      "turn": 3,
+      "chunk_idx": 2,
+      "chunk_chars": 4000,
+      "elapsed_sec": 11.56,
+      "response_preview": "[('Date: Apr 05, 2025', 'Date: Aug 27, 2024'), ('Date: Jan 21, 2025', 'Date: Mar 09, 2022'), ('Date: Apr 07, 2024', 'Date: Aug 01, 2022'), ('Date: Apr 04, 2024', 'Date: Sep 08, 2022'), ('Date: Apr 07, 2024', 'Date: Nov 19, 2024'), ('Date: Apr 10, 2024', 'Date: Feb 03, 2023'), ('Date: Apr 20, 2024', ",
+      "execution_compliance": {
+        "turn": 2,
+        "compliant": true,
+        "chunks_processed": 3,
+        "error": null,
+        "pair_results_exists": true,
+        "total_pairs": 3321,
+        "total_retractions": 83,
+        "pair_checks": 0,
+        "pair_results_count": 3321
+      },
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "is_final_chunk": true
+    }
+  ]
+}

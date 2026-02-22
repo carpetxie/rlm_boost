@@ -1,0 +1,39 @@
+{
+  "version": "v2_explicit_format",
+  "model": "gpt-4o-mini",
+  "max_chunk_chars": 6000,
+  "execution_compliance_rate": 1.0,
+  "f1": {
+    "precision": 0.861,
+    "recall": 0.1657,
+    "f1": 0.278,
+    "tp": 1326,
+    "fp": 214,
+    "fn": 6675,
+    "predicted_pairs": 1540,
+    "gold_pairs": 8001
+  },
+  "turn_results": [
+    {
+      "chunk_i": 0,
+      "compliant": true,
+      "chunks_processed": 2,
+      "pair_results_count": 1540,
+      "error": null
+    },
+    {
+      "chunk_i": 1,
+      "compliant": true,
+      "chunks_processed": 3,
+      "pair_results_count": 1540,
+      "error": null
+    },
+    {
+      "chunk_i": 2,
+      "compliant": true,
+      "chunks_processed": 4,
+      "pair_results_count": 1540,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of what I found and wrote:
+
+---
+
+## Critique 8 Summary
+
+**Overall**: Iteration 7 was productive — the live pipeline now executes correctly (100% compliance, F1=0.54), the failure mode taxonomy is new and publishable, and all prior critique items were resolved. But four issues now dominate before the paper can be submitted:
+
+### The Four Priority Issues
+
+**1. F1=0.54 is uninterpretable without a fair baseline** (highest priority)
+The incremental model processes 15K chars (5K×3 chunks) against gold from the full 25K corpus. This comparison has no informational value — it's coverage-bounded recall, not protocol quality. The experiment table that needs to exist:
+- Incremental RLM, k=5 chunks (25K total) — **missing**
+- Non-incremental RLM, 25K chars (oracle ceiling) — **missing**  
+- Non-incremental RLM, 5K chars (matched-budget baseline) — **missing**
+
+**2. Failure Mode C unresolved: `process_chunk` called 9× for 3 chunks**
+Turn 1 calls `process_chunk` 6 times, not 1. Every redundant call triggers O(u·n) retraction across ALL entities. The proposed deduplication guard (add `_processed_chunk_indices: dict[int, dict]` to `IncrementalState`) takes 10 lines and must be implemented before the 5-chunk experiment, or the measured savings will be wrong.
+
+**3. Weighted savings headline is methodologically unsound**
+The "~39% weighted token savings at k=5" uses a 78/22 token proportion from a single-call experiment, applied to a multi-turn setting where the same experiment measured 13/87 (inverted). These are different quantities. Remove this headline; report only pair-check savings (22% at k=5, 42% at k=10).
+
+**4. Lazy retraction "Exactly N" claim has no supporting data**
+Tasks 11 and 13 have 1,231–2,250 retractions at k=5 — more than the "unsafe" Task 4 (1,517). The `lazy_retraction_analysis.md` classifies "Exactly N" as ~0% bidirectional without running the per-entity analysis. This is a 15-minute experiment.
+
+### The One Big Thing
+Run the **5-chunk F1 progression experiment** with a matched non-incremental baseline. This produces the paper's central figure: F1 improving monotonically as context accumulates, compared against what a single-turn model can achieve at the same total character budget. All infrastructure exists — fix Mode C first, then run it.

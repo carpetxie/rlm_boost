@@ -1,0 +1,527 @@
+{
+  "config": {
+    "task_indices": [
+      1,
+      19
+    ],
+    "num_chunks": 5,
+    "update_rates": [
+      0.0,
+      0.05,
+      0.1,
+      0.2
+    ],
+    "seeds": [
+      42,
+      123,
+      456,
+      789,
+      1000
+    ]
+  },
+  "baseline_final_pairs": {
+    "1": 8001,
+    "19": 60
+  },
+  "no_op_assertion": "verified",
+  "results_by_rate": {
+    "0.00": {
+      "1": {
+        "mean_savings_pct": 22.06,
+        "std_savings_pct": 0.0,
+        "seeds_savings": [
+          22.06,
+          22.06,
+          22.06,
+          22.06,
+          22.06
+        ]
+      },
+      "19": {
+        "mean_savings_pct": 16.7,
+        "std_savings_pct": 0.0,
+        "seeds_savings": [
+          16.7,
+          16.7,
+          16.7,
+          16.7,
+          16.7
+        ]
+      }
+    },
+    "0.05": {
+      "1": {
+        "mean_savings_pct": 18.43,
+        "std_savings_pct": 0.48,
+        "seeds_savings": [
+          18.5,
+          19.23,
+          18.12,
+          18.2,
+          18.08
+        ]
+      },
+      "19": {
+        "mean_savings_pct": 12.98,
+        "std_savings_pct": 0.34,
+        "seeds_savings": [
+          13.0,
+          13.35,
+          13.28,
+          12.57,
+          12.71
+        ]
+      }
+    },
+    "0.10": {
+      "1": {
+        "mean_savings_pct": 14.67,
+        "std_savings_pct": 0.56,
+        "seeds_savings": [
+          14.24,
+          15.62,
+          14.29,
+          14.57,
+          14.63
+        ]
+      },
+      "19": {
+        "mean_savings_pct": 8.56,
+        "std_savings_pct": 1.06,
+        "seeds_savings": [
+          9.01,
+          6.87,
+          9.31,
+          8.2,
+          9.4
+        ]
+      }
+    },
+    "0.20": {
+      "1": {
+        "mean_savings_pct": 7.59,
+        "std_savings_pct": 0.26,
+        "seeds_savings": [
+          7.18,
+          7.62,
+          7.9,
+          7.62,
+          7.62
+        ]
+      },
+      "19": {
+        "mean_savings_pct": -0.03,
+        "std_savings_pct": 1.46,
+        "seeds_savings": [
+          -0.95,
+          -0.93,
+          0.42,
+          -1.05,
+          2.35
+        ]
+      }
+    }
+  },
+  "summary": [
+    {
+      "update_rate": 0.0,
+      "task_id": 1,
+      "seed": 42,
+      "savings_pct": 22.06,
+      "incr_checks": 57999,
+      "full_checks": 74414,
+      "retractions": 11793,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 19,
+      "seed": 42,
+      "savings_pct": 16.7,
+      "incr_checks": 61985,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 1,
+      "seed": 123,
+      "savings_pct": 22.06,
+      "incr_checks": 57999,
+      "full_checks": 74414,
+      "retractions": 11793,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 19,
+      "seed": 123,
+      "savings_pct": 16.7,
+      "incr_checks": 61985,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 1,
+      "seed": 456,
+      "savings_pct": 22.06,
+      "incr_checks": 57999,
+      "full_checks": 74414,
+      "retractions": 11793,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 19,
+      "seed": 456,
+      "savings_pct": 16.7,
+      "incr_checks": 61985,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 1,
+      "seed": 789,
+      "savings_pct": 22.06,
+      "incr_checks": 57999,
+      "full_checks": 74414,
+      "retractions": 11793,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 19,
+      "seed": 789,
+      "savings_pct": 16.7,
+      "incr_checks": 61985,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 1,
+      "seed": 1000,
+      "savings_pct": 22.06,
+      "incr_checks": 57999,
+      "full_checks": 74414,
+      "retractions": 11793,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 19,
+      "seed": 1000,
+      "savings_pct": 16.7,
+      "incr_checks": 61985,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 1,
+      "seed": 42,
+      "savings_pct": 18.5,
+      "incr_checks": 60645,
+      "full_checks": 74414,
+      "retractions": 12100,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 19,
+      "seed": 42,
+      "savings_pct": 13.0,
+      "incr_checks": 64737,
+      "full_checks": 74414,
+      "retractions": 88,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 1,
+      "seed": 123,
+      "savings_pct": 19.23,
+      "incr_checks": 60104,
+      "full_checks": 74414,
+      "retractions": 12129,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 19,
+      "seed": 123,
+      "savings_pct": 13.35,
+      "incr_checks": 64480,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 1,
+      "seed": 456,
+      "savings_pct": 18.12,
+      "incr_checks": 60933,
+      "full_checks": 74414,
+      "retractions": 12247,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 19,
+      "seed": 456,
+      "savings_pct": 13.28,
+      "incr_checks": 64529,
+      "full_checks": 74414,
+      "retractions": 88,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 1,
+      "seed": 789,
+      "savings_pct": 18.2,
+      "incr_checks": 60870,
+      "full_checks": 74414,
+      "retractions": 11964,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 19,
+      "seed": 789,
+      "savings_pct": 12.57,
+      "incr_checks": 65062,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 1,
+      "seed": 1000,
+      "savings_pct": 18.08,
+      "incr_checks": 60957,
+      "full_checks": 74414,
+      "retractions": 11918,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 19,
+      "seed": 1000,
+      "savings_pct": 12.71,
+      "incr_checks": 64957,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 1,
+      "seed": 42,
+      "savings_pct": 14.24,
+      "incr_checks": 63815,
+      "full_checks": 74414,
+      "retractions": 12674,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 19,
+      "seed": 42,
+      "savings_pct": 9.01,
+      "incr_checks": 67708,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 1,
+      "seed": 123,
+      "savings_pct": 15.62,
+      "incr_checks": 62787,
+      "full_checks": 74414,
+      "retractions": 12405,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 19,
+      "seed": 123,
+      "savings_pct": 6.87,
+      "incr_checks": 69305,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 1,
+      "seed": 456,
+      "savings_pct": 14.29,
+      "incr_checks": 63781,
+      "full_checks": 74414,
+      "retractions": 12488,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 19,
+      "seed": 456,
+      "savings_pct": 9.31,
+      "incr_checks": 67489,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 1,
+      "seed": 789,
+      "savings_pct": 14.57,
+      "incr_checks": 63574,
+      "full_checks": 74414,
+      "retractions": 12397,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 19,
+      "seed": 789,
+      "savings_pct": 8.2,
+      "incr_checks": 68310,
+      "full_checks": 74414,
+      "retractions": 88,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 1,
+      "seed": 1000,
+      "savings_pct": 14.63,
+      "incr_checks": 63524,
+      "full_checks": 74414,
+      "retractions": 12514,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 19,
+      "seed": 1000,
+      "savings_pct": 9.4,
+      "incr_checks": 67416,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 1,
+      "seed": 42,
+      "savings_pct": 7.18,
+      "incr_checks": 69070,
+      "full_checks": 74414,
+      "retractions": 13352,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 19,
+      "seed": 42,
+      "savings_pct": -0.95,
+      "incr_checks": 75123,
+      "full_checks": 74414,
+      "retractions": 92,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 1,
+      "seed": 123,
+      "savings_pct": 7.62,
+      "incr_checks": 68740,
+      "full_checks": 74414,
+      "retractions": 13176,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 19,
+      "seed": 123,
+      "savings_pct": -0.93,
+      "incr_checks": 75108,
+      "full_checks": 74414,
+      "retractions": 89,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 1,
+      "seed": 456,
+      "savings_pct": 7.9,
+      "incr_checks": 68537,
+      "full_checks": 74414,
+      "retractions": 13116,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 19,
+      "seed": 456,
+      "savings_pct": 0.42,
+      "incr_checks": 74102,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 1,
+      "seed": 789,
+      "savings_pct": 7.62,
+      "incr_checks": 68740,
+      "full_checks": 74414,
+      "retractions": 13187,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 19,
+      "seed": 789,
+      "savings_pct": -1.05,
+      "incr_checks": 75196,
+      "full_checks": 74414,
+      "retractions": 88,
+      "final_pairs": 60
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 1,
+      "seed": 1000,
+      "savings_pct": 7.62,
+      "incr_checks": 68746,
+      "full_checks": 74414,
+      "retractions": 13065,
+      "final_pairs": 8001
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 19,
+      "seed": 1000,
+      "savings_pct": 2.35,
+      "incr_checks": 72668,
+      "full_checks": 74414,
+      "retractions": 87,
+      "final_pairs": 60
+    }
+  ]
+}

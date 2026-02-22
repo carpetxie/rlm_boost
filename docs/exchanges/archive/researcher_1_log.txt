@@ -1,0 +1,31 @@
+## Summary of Iteration 1
+
+Here's what was accomplished in this iteration:
+
+### Experiments Run (3 total)
+
+1. **Token Cost & Failure Analysis** on existing OOLONG-Pairs results:
+   - Total cost: $17.46 for 20 tasks (4.05M tokens)
+   - Sub-model (gpt-5-mini) dominates at 78% of tokens
+   - Symmetric tasks: 84.3% F1, Asymmetric: 71.4% F1
+   - Worst failure: Task 19 (0.443 F1) — complex "exactly one" constraints
+
+2. **Streaming Ground Truth Simulation** (the dynamic benchmark):
+   - Pairs grow quadratically as users arrive (confirming O(n²) structure)
+   - Asymmetric tasks have 0% discoverability in early chunks
+   - **Novel finding**: Task 19 shows non-monotonic discovery — "exactly one" constraints mean new data can invalidate previously valid pairs
+
+3. **Incremental Advantage Analysis** (the core novelty quantification):
+   - **Token savings: 45.7% (3 chunks) → 62.3% (5 chunks) → 78.4% (10 chunks)**
+   - Incremental cost is essentially **constant** (~2.5M tokens) regardless of chunk count
+   - Full recompute cost grows linearly — this is the O(k·n) vs O(n²) advantage
+
+### Code Changes (8 files)
+- **Architecture**: Added incremental state awareness to persistent mode (model is told what's cached in REPL)
+- **Bug fixes**: Fixed `_default_answer` wrong message role, `REPLResult` field name mismatch
+- **Benchmarks**: Created complete Streaming OOLONG-Pairs benchmark with 4 modes
+- **Analysis**: Token cost analyzer, incremental advantage calculator
+- **Tests**: 9 new tests for incremental state feature (all passing, 144 total tests pass)
+
+### Key Insight
+The incremental advantage is real and quantifiable. At 10 chunks, persistent RLM theoretically saves **78% of computation** by processing only deltas. The next step is running the live benchmark with API keys to validate these theoretical savings translate to actual token and cost reductions.

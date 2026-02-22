@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from rlm.clients import BaseLM, get_client
+from rlm.core.history_manager import HistoryManager
 from rlm.core.lm_handler import LMHandler
 from rlm.core.types import (
     ClientBackend,
@@ -21,6 +22,7 @@ from rlm.utils.parsing import (
     format_iteration,
 )
 from rlm.utils.prompts import (
+    INCREMENTAL_SYSTEM_PROMPT,
     RLM_SYSTEM_PROMPT,
     QueryMetadata,
     build_rlm_system_prompt,
@@ -97,6 +99,14 @@ class RLM:
         # Persistence support
         self.persistent = persistent
         self._persistent_env: SupportsPersistence | None = None
+        self._turn_count: int = 0
+
+        # History manager for bounded message growth in persistent mode
+        self.history_manager = HistoryManager(
+            strategy="summarize" if persistent else "sliding_window",
+            max_recent_iterations=5,
+            max_messages=40,
+        )
 
         # Validate persistence support at initialization
         if self.persistent:
@@ -165,6 +175,9 @@ class RLM:
             env_kwargs["lm_handler_address"] = (lm_handler.host, lm_handler.port)
             env_kwargs["context_payload"] = prompt
             env_kwargs["depth"] = self.depth + 1  # Environment depth is RLM depth + 1
+            # Pass persistent flag so the environment can inject incremental primitives
+            # (_incremental, EntityCache, PairTracker) during setup().
+            env_kwargs["persistent"] = self.persistent
             environment: BaseEnv = get_environment(self.environment_type, env_kwargs)
 
             if self.persistent:
@@ -181,10 +194,21 @@ class RLM:
         """
         Setup the system prompt for the RLM. Also include metadata about the prompt and build
         up the initial message history.
+
+        When persistent mode is active and this is a non-first turn (context already loaded),
+        uses INCREMENTAL_SYSTEM_PROMPT to instruct the model to process only new data and
+        reuse cached results. This is the key mechanism that makes incremental computation
+        actionable in live runs.
         """
+        # Use incremental prompt on subsequent turns in persistent mode
+        if self.persistent and self._turn_count > 0:
+            effective_prompt = INCREMENTAL_SYSTEM_PROMPT
+        else:
+            effective_prompt = self.system_prompt
+
         metadata = QueryMetadata(prompt)
         message_history = build_rlm_system_prompt(
-            system_prompt=self.system_prompt, query_metadata=metadata
+            system_prompt=effective_prompt, query_metadata=metadata
         )
 
         return message_history
@@ -226,8 +250,21 @@ class RLM:
                     if isinstance(environment, SupportsPersistence)
                     else 0
                 )
-                current_prompt = message_history + [
-                    build_user_prompt(root_prompt, i, context_count, history_count)
+
+                # Collect cached variable info for incremental computation
+                # Include on EVERY iteration of non-first turns so the model always
+                # knows what's available in the REPL, not just on iteration 0
+                cached_vars = None
+                if self.persistent and context_count > 1:
+                    cached_vars = self._get_cached_vars(environment)
+
+                # Prune history if it's growing too large
+                pruned_history = self.history_manager.prune(
+                    message_history, turn_number=self._turn_count
+                )
+
+                current_prompt = pruned_history + [
+                    build_user_prompt(root_prompt, i, context_count, history_count, cached_vars)
                 ]
 
                 iteration: RLMIteration = self._completion_turn(
@@ -253,9 +290,14 @@ class RLM:
                     self.verbose.print_final_answer(final_answer)
                     self.verbose.print_summary(i + 1, time_end - time_start, usage.to_dict())
 
-                    # Store message history in persistent environment
+                    # Store message history and turn summary in persistent environment
                     if self.persistent and isinstance(environment, SupportsPersistence):
                         environment.add_history(message_history)
+                        summary = self.history_manager.generate_turn_summary(
+                            message_history, final_answer
+                        )
+                        self.history_manager.add_turn_summary(summary)
+                        self._turn_count += 1
 
                     return RLMChatCompletion(
                         root_model=self.backend_kwargs.get("model_name", "unknown")
@@ -280,9 +322,12 @@ class RLM:
             self.verbose.print_final_answer(final_answer)
             self.verbose.print_summary(self.max_iterations, time_end - time_start, usage.to_dict())
 
-            # Store message history in persistent environment
+            # Store message history and turn summary in persistent environment
             if self.persistent and isinstance(environment, SupportsPersistence):
                 environment.add_history(message_history)
+                summary = self.history_manager.generate_turn_summary(message_history, final_answer)
+                self.history_manager.add_turn_summary(summary)
+                self._turn_count += 1
 
             return RLMChatCompletion(
                 root_model=self.backend_kwargs.get("model_name", "unknown")
@@ -328,7 +373,7 @@ class RLM:
         """
         current_prompt = message_history + [
             {
-                "role": "assistant",
+                "role": "user",
                 "content": "Please provide a final answer to the user's question based on the information provided.",
             }
         ]
@@ -378,6 +423,24 @@ class RLM:
                 f"add_context(), and get_context_count(). "
                 f"Supported environments: {sorted(persistent_supported_environments)}"
             )
+
+    @staticmethod
+    def _get_cached_vars(environment: BaseEnv) -> dict[str, str] | None:
+        """Get a summary of cached variables in the REPL environment.
+
+        Returns a dict of {variable_name: type_name} for user-defined variables.
+        This enables incremental computation: the model knows what's already
+        been computed and can build on it rather than re-computing from scratch.
+        """
+        if not hasattr(environment, "locals"):
+            return None
+
+        cached = {}
+        for name, value in environment.locals.items():
+            if name.startswith("_") or name.startswith("context") or name.startswith("history"):
+                continue  # Skip internal, context, and history vars
+            cached[name] = type(value).__name__
+        return cached if cached else None
 
     @staticmethod
     def _env_supports_persistence(env: BaseEnv) -> bool:

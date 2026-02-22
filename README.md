@@ -1,160 +1,147 @@
+# Incremental Computation in Recursive Language Models
 
----
+This is a research fork of [RLM](https://github.com/alexzhang13/rlm) (MIT OASYS Lab) exploring **incremental computation** — making RLMs efficient when context arrives over time rather than all at once.
 
-<h1 align="center" style="font-size:2.8em">
-<span>Recursive Language Models (<span style="color:orange">RLM</span>s)</span>
-</h1>
+- **Base paper**: [Recursive Language Models](https://arxiv.org/abs/2512.24601) (Zhang, Kraska, Khattab, 2025)
+- **Base repo**: [alexzhang13/rlm](https://github.com/alexzhang13/rlm)
 
-<p align="center" style="font-size:1.3em">
-  <a href="https://arxiv.org/abs/2512.24601">Full Paper</a> •
-  <a href="https://alexzhang13.github.io/blog/2025/rlm/">Blogpost</a> •
-  <a href="https://alexzhang13.github.io/rlm/">Documentation</a> •
-  <a href="https://github.com/alexzhang13/rlm-minimal">RLM Minimal</a>
-</p>
+## The Problem
 
-<p align="center">
-  <a href="https://github.com/alexzhang13/rlm/actions/workflows/style.yml">
-    <img src="https://github.com/alexzhang13/rlm/actions/workflows/style.yml/badge.svg" alt="Style" />
-  </a>
-  <a href="https://github.com/alexzhang13/rlm/actions/workflows/test.yml">
-    <img src="https://github.com/alexzhang13/rlm/actions/workflows/test.yml/badge.svg" alt="Test" />
-  </a>
-</p>
+Standard RLMs re-read the *entire* context from scratch on every call. If context arrives in 5 chunks over time (streaming data, multi-turn conversations), the naive approach re-processes everything 5 times — O(n²) total work. But most of the context hasn't changed between chunks.
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2512.24601">
-    <img src="media/paper_preview.png" alt="Paper Preview" width="300"/>
-  </a>
-</p>
+**The dynamic metrics gap**: Current benchmarks (OOLONG, S-NIAH) only test static context — paste a big document, ask a question. But real-world context is *dynamic*: built up over many turns, changing incrementally. No existing benchmark measures this. This gap is both the motivation for the work and a potential contribution in itself.
 
-## Overview
-Recursive Language Models (RLMs) are a task-agnostic inference paradigm for language models (LMs) to handle near-infinite length contexts by enabling the LM to *programmatically* examine, decompose, and recursively call itself over its input. RLMs replace the canonical `llm.completion(prompt, model)` call with a `rlm.completion(prompt, model)` call. RLMs offload the context as a variable in a REPL environment that the LM can interact with and launch sub-LM calls inside of.
+## The Approach
 
-This repository provides an extensible inference engine for using RLMs around standard API-based and local LLMs. The initial experiments and idea were proposed in a [blogpost](https://alexzhang13.github.io/blog/2025/rlm/) in 2025, with expanded results in an [arXiv preprint](https://arxiv.org/abs/2512.24601).
+We built an incremental computation framework inside the RLM REPL:
 
-> [!NOTE]
-> This repository contains inference code for RLMs with support for various sandbox environments. Open-source contributions are welcome. This repository is maintained by the authors of the paper from the MIT OASYS lab.
+1. **First chunk**: Process all entities, classify them, find matching pairs, cache everything in persistent Python objects (`EntityCache`, `PairTracker`, `IncrementalState`)
+2. **Subsequent chunks**: Process only new entities, check them against cached classifications
+3. **Handle retractions**: When new data invalidates a previously correct answer (e.g., "exactly one location tag" violated by a second tag in a later chunk), the system detects this, retracts affected pairs via an inverted index, and re-evaluates them
 
-<!-- ## Installation
+The retraction mechanism is the core novelty — real-world conditions aren't always monotonic, and no prior incremental computation work in the LLM space handles non-monotonic updates.
+
+## Key Results
+
+Results from 12 automated research iterations (critiquer/researcher agent loop):
+
+### Headline
+
+- **94.3% of oracle F1** with P=1.0 (zero false positives) when processing 25K chars of OOLONG-Pairs data across 5 streaming turns of 5K chars each
+- **22–42% pair-check savings** at k=5 and k=10 chunks, with 100% correctness validation at every chunk for every task
+
+### Retraction Taxonomy
+
+- **360x retraction range** across 11 task types (138 retractions for strict conditions vs 15,824 for broad ones), driven by condition semantics rather than data volume
+- **49x temporal retraction asymmetry**: "before DATE" constraints produce far fewer retractions than "after DATE" due to monotonic vs bidirectional validity
+- Retraction overhead is **predictable from task selectivity** — not a function of entity count
+
+### Cost Model
+
 ```
-pip install rlm
+savings(k, σ) ≈ 51*(1-2.93/k) + 8.9*σ*(1+1.60/k)
 ```
-To install the latest from `main`:
-```
-pip install git+https://github.com/alexzhang13/rlm.git
-```
-``` -->
 
-## Quick Setup
-Set up the dependencies with `uv` (or your virtual environment of choice):
+R²=0.936, p=0.025. Break-even at k≥4 for all task types. Practitioners can use this to decide when incremental computation is worthwhile without running the full system.
+
+### Novel Findings
+
+1. **Non-monotonic retraction** for LLM-driven entity matching — "exactly N" constraints mean new data can invalidate previously valid pairs, requiring retraction and re-evaluation
+2. **Monotone attribute accumulation** as a correctness condition for streaming LLM computation — a 2-line fix implementing this took the A/C ratio from 64.3% to 94.3%
+3. **Failure mode taxonomy** for LLM protocol execution: entity ID mismatch, premature FINAL_VAR, redundant process_chunk
+4. **REPL-state as correctness ground truth** — deduplication guards in Python REPL state provide correctness guarantees independent of message history, enabling aggressive history pruning
+
+## Architecture
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `rlm/core/incremental.py` | `EntityCache`, `PairTracker`, `IncrementalState` with retraction support |
+| `rlm/core/history_manager.py` | Message history pruning (sliding window, summarize, token budget) |
+| `eval/incremental_simulation.py` | Simulation with real task conditions and correctness validation |
+| `eval/sigma_cost_model.py` | Cost model fitting and per-entity retraction analysis |
+| `tests/test_incremental_pipeline.py` | 28 tests for incremental primitives |
+| `tests/test_mock_lm_integration.py` | 12 mock-LM end-to-end integration tests |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `rlm/core/rlm.py` | Integrated HistoryManager, persistent mode, system prompt switching |
+| `rlm/utils/prompts.py` | Added `INCREMENTAL_SYSTEM_PROMPT` — protocol for incremental computation |
+| `rlm/environments/local_repl.py` | REPL injection of incremental primitives in persistent mode |
+| `eval/utils.py` | Extracted `_check_pair_condition()` for simulation use |
+
+### How It Works
+
+```
+Turn 1 (first chunk):
+  RLM.completion(prompt, context=chunk_1)
+  → RLM_SYSTEM_PROMPT
+  → Model parses all entities → entity_cache
+  → Model finds all pairs → pair_tracker
+  → Results cached in persistent REPL
+
+Turn 2+ (subsequent chunks):
+  RLM.completion(prompt, context=chunk_n)
+  → INCREMENTAL_SYSTEM_PROMPT (automatic switch)
+  → cached_vars hint shows what's already computed
+  → Model calls _incremental.process_chunk(new_entities)
+    → New entities added to cache
+    → Updated entities trigger retraction of affected pairs
+    → Only (new × existing) + (new × new) pairs checked
+  → History pruned to stay within token budget
+```
+
+## Score Progression (Critiquer Ratings)
+
+| Iteration | Novelty | Tech Soundness | Benchmark Perf | Scalability | Maturity |
+|-----------|---------|----------------|----------------|-------------|----------|
+| 1         | 3/10    | 6/10           | 7/10           | 4/10        | 2/10     |
+| 4         | 6/10    | 7/10           | 6/10           | 5/10        | 5/10     |
+| 8         | 7/10    | 7/10           | 6/10           | 6/10        | 7/10     |
+| 12        | 7/10    | 7/10           | 7/10           | 6/10        | 7/10     |
+| 13        | 7/10    | 7/10           | 8/10           | 5/10        | 6/10     |
+
+## Open Questions
+
+- **Dynamic benchmarks**: All evaluation uses artificially chunked static data. Genuinely dynamic benchmarks (Wikipedia edits, live conversations) remain future work.
+- **k-sensitivity**: How do savings scale across k={3, 5, 7, 10} chunks? The cost model predicts it but the `run_k_sensitivity_sweep()` function has never been called.
+- **Multi-run stability**: The 94.3% headline comes from the best of 2 runs; the other achieved 69.5%. Stability under the monotone attribute fix needs confirmation across 3-5 runs.
+- **Cross-task validation**: Tasks 3 and 6 with the V3 monotone fix are untested. At-risk fraction analysis predicts Task 6 benefits most.
+
+## Setup
+
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv init && uv venv --python 3.12  # change version as needed
+uv venv --python 3.12 && source .venv/bin/activate
 uv pip install -e .
+
+# Development
+make install-dev    # dev + test deps
+make check          # lint + format + test
+
+# Run benchmarks
+python eval/run_rlm.py --benchmark oolong --output results/oolong/rlm.json
+python eval/incremental_simulation.py  # incremental simulation
 ```
 
-This project includes a `Makefile` to simplify common tasks.
+## Full Research Log
 
-- `make install`: Install base dependencies.
-- `make check`: Run linter, formatter, and tests.
+See [`docs/research_log.md`](docs/research_log.md) for the complete experiment log across all 12 iterations — hypotheses, results, architectural decisions, dead ends, and pivots.
 
-To run a quick test, the following will run an RLM query with the OpenAI client using your environment variable `OPENAI_API_KEY` (feel free to change this). This will generate console output as well as a log which you can use with the visualizer to explore the trajectories.
-```bash
-make quickstart
-```
+## Citation
 
-The default RLM client uses a REPL environment that runs on the host process through Python `exec` calls. It uses the same virtual environment as the host process (i.e. it will have access to the same dependencies), but with some limitations in its available global modules. As an example, we can call RLM completions using GPT-5-nano:
-```python
-from rlm import RLM
-
-rlm = RLM(
-    backend="openai",
-    backend_kwargs={"model_name": "gpt-5-nano"},
-    verbose=True,  # For printing to console with rich, disabled by default.
-)
-
-print(rlm.completion("Print me the first 100 powers of two, each on a newline.").response)
-```
-
-## REPL Environments
-We support two types of REPL environments -- isolated, and non-isolated. Non-isolated environments (default) run code execution on the same machine as the RLM (e.g. through `exec`), which is pretty reasonable for some local low-risk tasks, like simple benchmarking, but can be problematic if the prompts or tool calls can interact with malicious users. Fully isolated environments used Cloud-based sandboxes (e.g. Prime Sandboxes, [Modal Sandboxes](https://modal.com/docs/guide/sandboxes)) to run code generated by the RLM, ensuring completely isolation from the host process. Environments can be added, but we natively support the following: `local` (default), `modal`, `prime`.
-
-```python
-rlm = RLM(
-    environment="...", # "local", "docker", "modal", "prime"
-    environment_kwargs={...},
-)
-```
-
-### Local Environments
-The default `local` environment `LocalREPL` runs in the same process as the RLM itself, with specified global and local namespaces for minimal security. Using this REPL is generally safe, but should not be used for production settings. It also shares the same virtual environment (e.g. Conda or uv) as the host process.
-
-#### Docker <img src="https://github.com/docker.png" alt="Docker" height="20" style="vertical-align: middle;"/> (*requires [Docker installed](https://docs.docker.com/desktop/setup/install/)*)
-We also support a Docker-based environment called `DockerREPL` that launches the REPL environment as a Docker image. By default, we use the `python:3.11-slim` image, but the user can specify custom images as well.
-
-### Isolated Environments
-We support several different REPL environments that run on separate, cloud-based machines. Whenever a recursive sub-call is made in these instances, it is requested from the host process.
-
-#### Modal Sandboxes <img src="https://github.com/modal-labs.png" alt="Modal" height="20" style="vertical-align: middle;"/>
-To use [Modal Sandboxes](https://modal.com/docs/guide/sandboxes) as the REPL environment, you need to install and authenticate your Modal account.
-```bash
-uv add modal  # add modal library
-modal setup   # authenticate account
-```
-
-#### Prime Intellect Sandboxes <img src="https://github.com/PrimeIntellect-ai.png" alt="Prime Intellect" height="20" style="vertical-align: middle;"/>
-> [!NOTE]
-> **Prime Intellect Sandboxes** are currently a beta feature. See the [documentation](https://docs.primeintellect.ai/sandboxes/overview) for more information. We noticed slow runtimes when using these sandboxes, which is currently an open issue.
-
-
-To use [Prime Sandboxes](https://docs.primeintellect.ai/sandboxes/sdk), install the SDK and set your API key:
-```bash
-uv pip install -e ".[prime]"
-export PRIME_API_KEY=...
-```
-
-
-### Model Providers
-We currently support most major clients (OpenAI, Anthropic), as well as the router platforms (OpenRouter, Portkey, LiteLLM). For local models, we recommend using vLLM (which interfaces with the [OpenAI client](https://github.com/alexzhang13/rlm/blob/main/rlm/clients/openai.py)). To view or add support for more clients, start by looking at [`rlm/clients/`](https://github.com/alexzhang13/rlm/tree/main/rlm/clients).
-
-## Relevant Reading
-* **[Dec '25]** [Recursive Language Models arXiv](https://arxiv.org/abs/2512.24601)
-* **[Oct '25]** [Recursive Language Models Blogpost](https://alexzhang13.github.io/blog/2025/rlm/)
-
-If you use this code or repository in your research, please cite:
+This work builds on:
 
 ```bibtex
 @misc{zhang2025recursivelanguagemodels,
-      title={Recursive Language Models}, 
+      title={Recursive Language Models},
       author={Alex L. Zhang and Tim Kraska and Omar Khattab},
       year={2025},
       eprint={2512.24601},
       archivePrefix={arXiv},
       primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2512.24601}, 
+      url={https://arxiv.org/abs/2512.24601},
 }
 ```
-
-## Optional Debugging: Visualizing RLM Trajectories
-We additionally provide a simple visualizer tool to examine and view the code, sub-LM, and root-LM calls of an RLM trajectory. To save log files (`.jsonl`) on every completion call that can be viewed in the visualizer, initialize the `RLMLogger` object and pass it into the `RLM` on initialization:
-```python
-from rlm.logger import RLMLogger
-from rlm import RLM
-
-logger = RLMLogger(log_dir="./logs")
-rlm = RLM(
-    ...
-    logger=logger
-)
-```
-
-To run the visualizer locally, we use Node.js and shadcn/ui:
-```
-cd visualizer/
-npm run dev        # default localhost:3001
-```
-
-You'll have the option to select saved `.jsonl` files 
-<p align="center">
-  <img src="media/visualizer.png" alt="RLM Visualizer Example" width="800"/>
-</p>

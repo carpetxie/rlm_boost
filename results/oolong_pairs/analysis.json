@@ -1,0 +1,259 @@
+{
+  "overall_f1": 77.83515465365845,
+  "symmetric_f1": 84.28359853417362,
+  "asymmetric_f1": 71.3867107731433,
+  "total_tokens": 4052068,
+  "estimated_cost": 17.46443,
+  "per_task": [
+    {
+      "task_id": 1,
+      "f1": 0.984064503841026,
+      "precision": 1.0,
+      "recall": 0.9686289213848269,
+      "predicted_pairs": 7750,
+      "gold_pairs": 8001,
+      "true_positive": 7750,
+      "false_positive": 0,
+      "false_negative": 251
+    },
+    {
+      "task_id": 2,
+      "f1": 0.686429885382765,
+      "precision": 0.5526315789473685,
+      "recall": 0.905713218820015,
+      "predicted_pairs": 8778,
+      "gold_pairs": 5356,
+      "true_positive": 4851,
+      "false_positive": 3927,
+      "false_negative": 505
+    },
+    {
+      "task_id": 3,
+      "f1": 0.5510835913312693,
+      "precision": 0.978021978021978,
+      "recall": 0.38362068965517243,
+      "predicted_pairs": 4095,
+      "gold_pairs": 10440,
+      "true_positive": 4005,
+      "false_positive": 90,
+      "false_negative": 6435
+    },
+    {
+      "task_id": 4,
+      "f1": 0.8671875,
+      "precision": 0.8564814814814815,
+      "recall": 0.8781645569620253,
+      "predicted_pairs": 3240,
+      "gold_pairs": 3160,
+      "true_positive": 2775,
+      "false_positive": 465,
+      "false_negative": 385
+    },
+    {
+      "task_id": 5,
+      "f1": 0.8228571428571428,
+      "precision": 0.8347826086956521,
+      "recall": 0.8112676056338028,
+      "predicted_pairs": 2415,
+      "gold_pairs": 2485,
+      "true_positive": 2016,
+      "false_positive": 399,
+      "false_negative": 469
+    },
+    {
+      "task_id": 6,
+      "f1": 0.9618454010601736,
+      "precision": 1.0,
+      "recall": 0.9264953428346987,
+      "predicted_pairs": 8256,
+      "gold_pairs": 8911,
+      "true_positive": 8256,
+      "false_positive": 0,
+      "false_negative": 655
+    },
+    {
+      "task_id": 7,
+      "f1": 0.9084201388888888,
+      "precision": 0.9179824561403509,
+      "recall": 0.8990549828178694,
+      "predicted_pairs": 4560,
+      "gold_pairs": 4656,
+      "true_positive": 4186,
+      "false_positive": 374,
+      "false_negative": 470
+    },
+    {
+      "task_id": 8,
+      "f1": 0.8881383567227624,
+      "precision": 0.8431177446102819,
+      "recall": 0.938238188976378,
+      "predicted_pairs": 9045,
+      "gold_pairs": 8128,
+      "true_positive": 7626,
+      "false_positive": 1419,
+      "false_negative": 502
+    },
+    {
+      "task_id": 9,
+      "f1": 0.7916666666666666,
+      "precision": 0.7046035805626598,
+      "recall": 0.9032786885245901,
+      "predicted_pairs": 2346,
+      "gold_pairs": 1830,
+      "true_positive": 1653,
+      "false_positive": 693,
+      "false_negative": 177
+    },
+    {
+      "task_id": 10,
+      "f1": 0.9666666666666667,
+      "precision": 0.9666666666666667,
+      "recall": 0.9666666666666667,
+      "predicted_pairs": 1770,
+      "gold_pairs": 1770,
+      "true_positive": 1711,
+      "false_positive": 59,
+      "false_negative": 59
+    },
+    {
+      "task_id": 11,
+      "f1": 0.5912269548633184,
+      "precision": 0.5260180995475113,
+      "recall": 0.6748911465892597,
+      "predicted_pairs": 884,
+      "gold_pairs": 689,
+      "true_positive": 465,
+      "false_positive": 419,
+      "false_negative": 224
+    },
+    {
+      "task_id": 12,
+      "f1": 0.9128601546029514,
+      "precision": 0.9686800894854586,
+      "recall": 0.8631229235880399,
+      "predicted_pairs": 1341,
+      "gold_pairs": 1505,
+      "true_positive": 1299,
+      "false_positive": 42,
+      "false_negative": 206
+    },
+    {
+      "task_id": 13,
+      "f1": 0.6409102937284996,
+      "precision": 0.5370288248337028,
+      "recall": 0.7946194225721784,
+      "predicted_pairs": 2255,
+      "gold_pairs": 1524,
+      "true_positive": 1211,
+      "false_positive": 1044,
+      "false_negative": 313
+    },
+    {
+      "task_id": 14,
+      "f1": 0.6487025948103792,
+      "precision": 0.7497116493656286,
+      "recall": 0.5716798592788038,
+      "predicted_pairs": 867,
+      "gold_pairs": 1137,
+      "true_positive": 650,
+      "false_positive": 217,
+      "false_negative": 487
+    },
+    {
+      "task_id": 15,
+      "f1": 0.7758186397984888,
+      "precision": 0.7275590551181103,
+      "recall": 0.8309352517985612,
+      "predicted_pairs": 1270,
+      "gold_pairs": 1112,
+      "true_positive": 924,
+      "false_positive": 346,
+      "false_negative": 188
+    },
+    {
+      "task_id": 16,
+      "f1": 0.6680584551148225,
+      "precision": 0.5925925925925926,
+      "recall": 0.7655502392344498,
+      "predicted_pairs": 270,
+      "gold_pairs": 209,
+      "true_positive": 160,
+      "false_positive": 110,
+      "false_negative": 49
+    },
+    {
+      "task_id": 17,
+      "f1": 0.8957294602211143,
+      "precision": 0.9049496276828735,
+      "recall": 0.886695278969957,
+      "predicted_pairs": 2283,
+      "gold_pairs": 2330,
+      "true_positive": 2066,
+      "false_positive": 217,
+      "false_negative": 264
+    },
+    {
+      "task_id": 18,
+      "f1": 0.7742830712303422,
+      "precision": 0.7081218274111675,
+      "recall": 0.8540816326530613,
+      "predicted_pairs": 1182,
+      "gold_pairs": 980,
+      "true_positive": 837,
+      "false_positive": 345,
+      "false_negative": 143
+    },
+    {
+      "task_id": 19,
+      "f1": 0.44303797468354433,
+      "precision": 0.35714285714285715,
+      "recall": 0.5833333333333334,
+      "predicted_pairs": 98,
+      "gold_pairs": 60,
+      "true_positive": 35,
+      "false_positive": 63,
+      "false_negative": 25
+    },
+    {
+      "task_id": 20,
+      "f1": 0.7880434782608695,
+      "precision": 0.6872037914691943,
+      "recall": 0.9235668789808917,
+      "predicted_pairs": 422,
+      "gold_pairs": 314,
+      "true_positive": 290,
+      "false_positive": 132,
+      "false_negative": 24
+    }
+  ],
+  "failure_categories": {
+    "low_precision": [
+      19
+    ],
+    "low_recall": [
+      3
+    ],
+    "both_low": [
+      2,
+      9,
+      11,
+      13,
+      14,
+      15,
+      16,
+      18,
+      20
+    ],
+    "good": [
+      1,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10,
+      12,
+      17
+    ]
+  }
+}

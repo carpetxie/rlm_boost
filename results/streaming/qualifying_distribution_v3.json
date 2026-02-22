@@ -1,0 +1,442 @@
+{
+  "task_1": {
+    "task_idx": 1,
+    "task_label": "\"numeric value\" or \"location\"",
+    "num_chunks": 5,
+    "max_chunk_chars": 5000,
+    "total_qualifying_entities": 56,
+    "per_chunk_qualifying_counts": [
+      13,
+      20,
+      13,
+      10,
+      12
+    ],
+    "per_chunk_first_qualifying": [
+      13,
+      19,
+      12,
+      7,
+      5
+    ],
+    "gini_coefficient": 0.1235,
+    "qualifying_multi_chunk_count": 29,
+    "qualifying_multi_chunk_fraction": 0.5179,
+    "attribute_overwriting_at_risk_count": 13,
+    "attribute_overwriting_at_risk_fraction": 0.2321,
+    "at_risk_entities": [
+      {
+        "uid": "28302",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "41798",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          3,
+          4
+        ]
+      },
+      {
+        "uid": "61860",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "56180",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "88609",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          3,
+          4
+        ]
+      },
+      {
+        "uid": "48599",
+        "first_qualifying_chunk": 3,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "16542",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "95496",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "90415",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "31080",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          2,
+          3
+        ]
+      },
+      {
+        "uid": "90314",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          1
+        ]
+      },
+      {
+        "uid": "64700",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "47450",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      }
+    ]
+  },
+  "task_3": {
+    "task_idx": 3,
+    "task_label": "\"description and abstract concept\" or \"abbreviation\"",
+    "num_chunks": 5,
+    "max_chunk_chars": 5000,
+    "total_qualifying_entities": 64,
+    "per_chunk_qualifying_counts": [
+      16,
+      12,
+      17,
+      18,
+      14
+    ],
+    "per_chunk_first_qualifying": [
+      16,
+      10,
+      13,
+      15,
+      10
+    ],
+    "gini_coefficient": 0.0779,
+    "qualifying_multi_chunk_count": 33,
+    "qualifying_multi_chunk_fraction": 0.5156,
+    "attribute_overwriting_at_risk_count": 17,
+    "attribute_overwriting_at_risk_fraction": 0.2656,
+    "at_risk_entities": [
+      {
+        "uid": "16303",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          2
+        ]
+      },
+      {
+        "uid": "41798",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          2,
+          3
+        ]
+      },
+      {
+        "uid": "66275",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "61860",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "uid": "48599",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "95496",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3,
+          4
+        ]
+      },
+      {
+        "uid": "30104",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          1
+        ]
+      },
+      {
+        "uid": "44436",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          2
+        ]
+      },
+      {
+        "uid": "89840",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "24601",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "90415",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "78106",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          3,
+          4
+        ]
+      },
+      {
+        "uid": "31080",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          1,
+          2
+        ]
+      },
+      {
+        "uid": "90314",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "64700",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "25984",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "88269",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      }
+    ]
+  },
+  "task_6": {
+    "task_idx": 6,
+    "task_label": "\"location\" or \"abbreviation\"",
+    "num_chunks": 5,
+    "max_chunk_chars": 5000,
+    "total_qualifying_entities": 60,
+    "per_chunk_qualifying_counts": [
+      13,
+      14,
+      14,
+      16,
+      12
+    ],
+    "per_chunk_first_qualifying": [
+      13,
+      13,
+      13,
+      13,
+      8
+    ],
+    "gini_coefficient": 0.0522,
+    "qualifying_multi_chunk_count": 31,
+    "qualifying_multi_chunk_fraction": 0.5167,
+    "attribute_overwriting_at_risk_count": 19,
+    "attribute_overwriting_at_risk_fraction": 0.3167,
+    "at_risk_entities": [
+      {
+        "uid": "28302",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "41798",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3,
+          4
+        ]
+      },
+      {
+        "uid": "61860",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          2,
+          4
+        ]
+      },
+      {
+        "uid": "53594",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          2
+        ]
+      },
+      {
+        "uid": "29940",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "88609",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "81993",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "95496",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "92935",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          2
+        ]
+      },
+      {
+        "uid": "44436",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          2
+        ]
+      },
+      {
+        "uid": "89840",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "24601",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "90415",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "78106",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          3
+        ]
+      },
+      {
+        "uid": "31080",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          2,
+          3
+        ]
+      },
+      {
+        "uid": "90314",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "64700",
+        "first_qualifying_chunk": 1,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "47450",
+        "first_qualifying_chunk": 2,
+        "non_qualifying_reappearance_chunks": [
+          4
+        ]
+      },
+      {
+        "uid": "25984",
+        "first_qualifying_chunk": 0,
+        "non_qualifying_reappearance_chunks": [
+          1,
+          3
+        ]
+      }
+    ]
+  }
+}

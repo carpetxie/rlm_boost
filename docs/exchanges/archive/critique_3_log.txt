@@ -1,0 +1,25 @@
+Critique written to `docs/exchanges/critique_latest.md`. Here's the summary:
+
+## Key Findings
+
+### Critical Issue: Simulation Validity
+The `_simple_pair_match` function in `incremental_simulation.py` is a simplified proxy that makes Tasks 1, 3, and 6 produce **identical results** (39,582 pair checks, 16,415 retractions, 10,019 pairs). The real task checker `make_task_checker()` exists in the same file but is never called. This is a **one-line fix** that would immediately differentiate the tasks and make results citable.
+
+### Bug Found: Double-Counting in `process_chunk()`
+`IncrementalState.process_chunk()` checks updated × new pairs twice — once in the "new × existing" loop and once in the "updated × all" loop. This inflates pair-check counts.
+
+### Missing: Correctness Validation
+The simulation measures efficiency (pair-check savings) but never verifies that incremental computation produces the **same results** as full recomputation. Without this, the savings numbers are meaningless.
+
+### Dead Code: INCREMENTAL_SYSTEM_PROMPT
+Defined but never imported or used in `rlm.py`. The model never receives incremental instructions.
+
+### The One Big Thing
+**Fix the simulation to use real task conditions + add correctness assertions.** This is ~30 minutes of work and transforms the findings from "preliminary simulation" to "verified result ready for a paper."
+
+### Scores
+- Novelty: 5/10 (+2) — retraction mechanism is genuinely novel, but demonstrated only on simplified tasks
+- Technical Soundness: 5/10 (-1) — simulation validity issues
+- Benchmark Performance: 5/10 (-2) — savings numbers not based on real conditions  
+- Scalability: 5/10 (+1) — HistoryManager helps
+- Research Maturity: 4/10 (+2) — substantial architecture, zero live experiments

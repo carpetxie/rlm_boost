@@ -1,0 +1,25 @@
+All 172 tests pass (5 skipped are pre-existing). Here's a complete summary of Iteration 4:
+
+---
+
+## Iteration 4 — Complete
+
+### What Was Done
+
+**1. Mock-LM Integration Test: 12/12 passing** — The highest-priority gap from the critique is now closed. `tests/test_mock_lm_integration.py` validates the full incremental pipeline end-to-end with a `ScriptedMockLM`:
+- Turn 1 gets `RLM_SYSTEM_PROMPT`, turns 2+ get `INCREMENTAL_SYSTEM_PROMPT` ✓
+- `cached_vars` hint ("INCREMENTAL STATE") appears in turn 2+ user prompts ✓
+- REPL variables (`entity_cache`, `pair_results`, `processed_ids`) persist across turns ✓
+- `_incremental`, `EntityCache`, `PairTracker` are accessible in the persistent REPL ✓
+- Context versioning (`context_0`, `context_1`, ...) and history storage work ✓
+- `PairTracker.retract_entity()` does not double-count retractions ✓
+
+**2. Temporal Task Sweep: 10/10 simulations correct** — Ran tasks 4, 5, 7, 9, 10 at both 5 and 10 chunks. **New novel finding**: "before DATE" temporal constraints produce 3–49× fewer retractions than "after DATE" constraints (Task 5: 44 retractions vs Task 7: 2,151 at 5 chunks). Mechanism: "before" cutoffs create monotonic invalidation; "after" cutoffs create bidirectional validity flips.
+
+**3. Weighted Token Savings — the headline number**: Using the Experiment 1 token breakdown (78% entity parsing, 22% pair-checking), the combined weighted savings are:
+- **k=5 chunks: ~39%** (vs 22% pair-check-only — 1.8× stronger)
+- **k=10 chunks: ~57%** (vs 42% pair-check-only — 1.4× stronger)
+
+**4. Cost Model fitted**: `pair_savings(k) ≈ 0.52 × (1 - 2.78/k)`, R²=0.90 over 28 datapoints across 11 tasks and 3 chunk counts. Key finding: sigma (task selectivity) explains only 3–6pp of variance; chunk count is the dominant driver. The sigma gap narrows from 5.9pp at k=3 to 3.4pp at k=10, confirming the convergence intuition from the critique.
+
+**5. Code fixes**: Moved 3 inline `from eval.utils import _check_pair_condition` statements out of the hot loop to top-level imports in `incremental_simulation.py`.

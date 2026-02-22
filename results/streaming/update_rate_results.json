@@ -1,0 +1,179 @@
+{
+  "config": {
+    "task_indices": [
+      1,
+      19
+    ],
+    "num_chunks": 5,
+    "update_rates": [
+      0.0,
+      0.05,
+      0.1,
+      0.2
+    ]
+  },
+  "results_by_rate": {
+    "0.00": {
+      "1": {
+        "task_id": 1,
+        "update_rate": 0.0,
+        "num_chunks": 5,
+        "incr_pair_checks": 57999,
+        "full_pair_checks": 74414,
+        "savings_pct": 22.06,
+        "total_retractions": 11793,
+        "final_pairs": 8001,
+        "total_entities": 231
+      },
+      "19": {
+        "task_id": 19,
+        "update_rate": 0.0,
+        "num_chunks": 5,
+        "incr_pair_checks": 61985,
+        "full_pair_checks": 74414,
+        "savings_pct": 16.7,
+        "total_retractions": 87,
+        "final_pairs": 60,
+        "total_entities": 231
+      }
+    },
+    "0.05": {
+      "1": {
+        "task_id": 1,
+        "update_rate": 0.05,
+        "num_chunks": 5,
+        "incr_pair_checks": 60645,
+        "full_pair_checks": 74414,
+        "savings_pct": 18.5,
+        "total_retractions": 12100,
+        "final_pairs": 8001,
+        "total_entities": 231
+      },
+      "19": {
+        "task_id": 19,
+        "update_rate": 0.05,
+        "num_chunks": 5,
+        "incr_pair_checks": 64737,
+        "full_pair_checks": 74414,
+        "savings_pct": 13.0,
+        "total_retractions": 88,
+        "final_pairs": 60,
+        "total_entities": 231
+      }
+    },
+    "0.10": {
+      "1": {
+        "task_id": 1,
+        "update_rate": 0.1,
+        "num_chunks": 5,
+        "incr_pair_checks": 63815,
+        "full_pair_checks": 74414,
+        "savings_pct": 14.24,
+        "total_retractions": 12674,
+        "final_pairs": 8001,
+        "total_entities": 231
+      },
+      "19": {
+        "task_id": 19,
+        "update_rate": 0.1,
+        "num_chunks": 5,
+        "incr_pair_checks": 67708,
+        "full_pair_checks": 74414,
+        "savings_pct": 9.01,
+        "total_retractions": 87,
+        "final_pairs": 60,
+        "total_entities": 231
+      }
+    },
+    "0.20": {
+      "1": {
+        "task_id": 1,
+        "update_rate": 0.2,
+        "num_chunks": 5,
+        "incr_pair_checks": 69070,
+        "full_pair_checks": 74414,
+        "savings_pct": 7.18,
+        "total_retractions": 13352,
+        "final_pairs": 8001,
+        "total_entities": 231
+      },
+      "19": {
+        "task_id": 19,
+        "update_rate": 0.2,
+        "num_chunks": 5,
+        "incr_pair_checks": 75123,
+        "full_pair_checks": 74414,
+        "savings_pct": -0.95,
+        "total_retractions": 92,
+        "final_pairs": 60,
+        "total_entities": 231
+      }
+    }
+  },
+  "summary": [
+    {
+      "update_rate": 0.0,
+      "task_id": 1,
+      "savings_pct": 22.06,
+      "incr_checks": 57999,
+      "full_checks": 74414,
+      "retractions": 11793
+    },
+    {
+      "update_rate": 0.0,
+      "task_id": 19,
+      "savings_pct": 16.7,
+      "incr_checks": 61985,
+      "full_checks": 74414,
+      "retractions": 87
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 1,
+      "savings_pct": 18.5,
+      "incr_checks": 60645,
+      "full_checks": 74414,
+      "retractions": 12100
+    },
+    {
+      "update_rate": 0.05,
+      "task_id": 19,
+      "savings_pct": 13.0,
+      "incr_checks": 64737,
+      "full_checks": 74414,
+      "retractions": 88
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 1,
+      "savings_pct": 14.24,
+      "incr_checks": 63815,
+      "full_checks": 74414,
+      "retractions": 12674
+    },
+    {
+      "update_rate": 0.1,
+      "task_id": 19,
+      "savings_pct": 9.01,
+      "incr_checks": 67708,
+      "full_checks": 74414,
+      "retractions": 87
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 1,
+      "savings_pct": 7.18,
+      "incr_checks": 69070,
+      "full_checks": 74414,
+      "retractions": 13352
+    },
+    {
+      "update_rate": 0.2,
+      "task_id": 19,
+      "savings_pct": -0.95,
+      "incr_checks": 75123,
+      "full_checks": 74414,
+      "retractions": 92
+    }
+  ]
+}
