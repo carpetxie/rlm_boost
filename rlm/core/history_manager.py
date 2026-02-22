@@ -19,6 +19,7 @@ This implements a "sliding window + summary" approach:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -210,8 +211,6 @@ class HistoryManager:
 
             if role == "user" and "Code executed:" in content:
                 # Extract code
-                import re
-
                 code_match = re.search(r"```python\n(.*?)```", content, re.DOTALL)
                 if code_match:
                     code = code_match.group(1).strip()
@@ -273,8 +272,6 @@ class HistoryManager:
         for msg in iteration_messages:
             content = msg.get("content", "")
             if "REPL variables:" in content:
-                import re
-
                 var_match = re.search(r"REPL variables: \[(.*?)\]", content)
                 if var_match:
                     for v in var_match.group(1).split(","):
