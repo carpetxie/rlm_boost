@@ -22,6 +22,7 @@ from rlm.utils.parsing import (
     format_iteration,
 )
 from rlm.utils.prompts import (
+    INCREMENTAL_SYSTEM_PROMPT,
     RLM_SYSTEM_PROMPT,
     QueryMetadata,
     build_rlm_system_prompt,
@@ -190,10 +191,21 @@ class RLM:
         """
         Setup the system prompt for the RLM. Also include metadata about the prompt and build
         up the initial message history.
+
+        When persistent mode is active and this is a non-first turn (context already loaded),
+        uses INCREMENTAL_SYSTEM_PROMPT to instruct the model to process only new data and
+        reuse cached results. This is the key mechanism that makes incremental computation
+        actionable in live runs.
         """
+        # Use incremental prompt on subsequent turns in persistent mode
+        if self.persistent and self._turn_count > 0:
+            effective_prompt = INCREMENTAL_SYSTEM_PROMPT
+        else:
+            effective_prompt = self.system_prompt
+
         metadata = QueryMetadata(prompt)
         message_history = build_rlm_system_prompt(
-            system_prompt=self.system_prompt, query_metadata=metadata
+            system_prompt=effective_prompt, query_metadata=metadata
         )
 
         return message_history
@@ -237,10 +249,10 @@ class RLM:
                 )
 
                 # Collect cached variable info for incremental computation
+                # Include on EVERY iteration of non-first turns so the model always
+                # knows what's available in the REPL, not just on iteration 0
                 cached_vars = None
-                if self.persistent and context_count > 1 and i == 0:
-                    # On the first iteration of a non-first turn, tell the model
-                    # about existing REPL state so it can build incrementally
+                if self.persistent and context_count > 1:
                     cached_vars = self._get_cached_vars(environment)
 
                 # Prune history if it's growing too large
