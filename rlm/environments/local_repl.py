@@ -165,6 +165,16 @@ class LocalREPL(NonIsolatedEnv):
         self.globals["llm_query"] = self._llm_query
         self.globals["llm_query_batched"] = self._llm_query_batched
 
+        # Inject incremental computation primitives if in persistent mode
+        if self.persistent:
+            from rlm.core.incremental import EntityCache, IncrementalState, PairTracker
+
+            self.locals["EntityCache"] = EntityCache
+            self.locals["PairTracker"] = PairTracker
+            self.locals["IncrementalState"] = IncrementalState
+            # Pre-create an incremental state instance
+            self.locals["_incremental"] = IncrementalState()
+
     def _final_var(self, variable_name: str) -> str:
         """Return the value of a variable as a final answer."""
         variable_name = variable_name.strip().strip("\"'")
