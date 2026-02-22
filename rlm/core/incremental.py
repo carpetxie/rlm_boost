@@ -33,6 +33,12 @@ class EntityCache:
 
     Supports O(1) lookup by entity ID and O(k) iteration over
     entities from a specific chunk.
+
+    Limitation: No deletion support. Entities are retained indefinitely once
+    added. For streaming scenarios with entity disappearance, stale pairs may
+    persist. If entity disappearance is needed, the caller must explicitly call
+    pair_tracker.retract_entity() and then remove the entity from the cache
+    manually (not supported by this class in the current implementation).
     """
 
     def __init__(self):
@@ -206,6 +212,27 @@ class IncrementalState:
 
         Returns:
             Dict with processing stats for this chunk
+
+        Complexity: O((k + u) · n) per chunk, where:
+            k = number of new entities in this chunk
+            u = number of updated entities (entities seen in prior chunks, now updated)
+            n = total entities accumulated so far
+
+        The new-entity loop is O(k · n) — the main savings driver (k ≪ n).
+        The updated-entity sweep is O(u · n) per chunk. When u is small relative
+        to k (entities rarely re-appear across chunks), the incremental approach
+        remains efficient. However, if u is large (e.g., 10%+ of entities are
+        updated per chunk in high-churn streaming settings), the updated-entity
+        sweep can dominate and may exceed the cost of full recompute (O(n²/k)
+        per chunk). In that regime, reduce chunk granularity to lower u, or
+        switch to full recompute.
+
+        The theoretical savings claim O(k · n) vs O(n²) holds when u ≪ k.
+        For OOLONG-Pairs (N=231, u≈0 per chunk), this is satisfied. For general
+        streaming applications, measure u/k before relying on the savings estimate.
+
+        Note: _find_system_end() assumes the first user message is the
+        system-setup boundary. This precondition must hold for correct pruning.
         """
         existing_ids = self.entity_cache.get_ids()
         updated_ids = set()

@@ -108,6 +108,7 @@ def run_incremental_simulation(
     labeled_context: str,
     task_indices: list[int],
     num_chunks: int,
+    max_entities: int | None = None,
 ) -> dict:
     """Run the full incremental simulation with correctness validation.
 
@@ -116,8 +117,58 @@ def run_incremental_simulation(
     2. Uses real task conditions via _check_pair_condition
     3. Validates: incremental pairs == full-recompute pairs after each chunk
     4. Measures pair-check savings and retraction overhead
+
+    Args:
+        labeled_context: Full labeled OOLONG-Pairs text
+        task_indices: List of task IDs to simulate
+        num_chunks: Number of chunks to split context into
+        max_entities: If set, subsample the first max_entities unique user IDs.
+            Used for cross-N validation of the cost model (N=100, 231, 462).
+            For N > number of actual entities, entities are repeated to create
+            a denser dataset (N=462 = 2× the original 231 entities, entity IDs
+            are suffixed with '_copy1' to avoid collision).
     """
     chunks = split_labeled_context(labeled_context, num_chunks)
+
+    # Cross-N validation: subsample or expand entity count.
+    # Collect all unique user IDs across all chunks upfront.
+    if max_entities is not None:
+        all_user_ids_ordered: list[int] = []
+        seen_ids: set[int] = set()
+        for chunk in chunks:
+            chunk_users = parse_users_from_labeled(chunk)
+            for uid in chunk_users:
+                if uid not in seen_ids:
+                    all_user_ids_ordered.append(uid)
+                    seen_ids.add(uid)
+
+        actual_n = len(all_user_ids_ordered)
+        if max_entities <= actual_n:
+            # Subsample: keep only the first max_entities unique IDs
+            keep_ids = set(all_user_ids_ordered[:max_entities])
+            print(f"  [cross-N] Subsampling to {max_entities} / {actual_n} entities")
+        else:
+            # Expand: repeat entities with suffixed IDs to reach max_entities
+            # (purely for cost-model stress testing, not semantic validity)
+            keep_ids = set(all_user_ids_ordered)
+            print(f"  [cross-N] Entity count ({actual_n}) < max_entities ({max_entities}); "
+                  f"using all {actual_n} entities (expansion not implemented for labeled context)")
+            max_entities = actual_n  # cap at actual count
+
+        # Filter chunks to only include the selected entity IDs
+        filtered_chunks = []
+        for chunk in chunks:
+            chunk_users = parse_users_from_labeled(chunk)
+            filtered_ids = {uid for uid in chunk_users if uid in keep_ids}
+            if filtered_ids:
+                filtered_chunks.append(chunk)  # keep chunk text as-is; filtering done per-chunk in loop
+            else:
+                filtered_chunks.append("")
+        chunks = filtered_chunks
+        _entity_filter = keep_ids
+    else:
+        _entity_filter = None
+
     results = {}
 
     for task_idx in task_indices:
@@ -147,7 +198,12 @@ def run_incremental_simulation(
 
         for chunk_i, chunk in enumerate(chunks):
             cumulative_labeled += chunk
-            chunk_users = parse_users_from_labeled(chunk)
+            chunk_users_raw = parse_users_from_labeled(chunk)
+            # Apply entity filter if cross-N subsampling is active
+            chunk_users = {
+                uid: inst for uid, inst in chunk_users_raw.items()
+                if _entity_filter is None or uid in _entity_filter
+            }
 
             # ===== INCREMENTAL (via process_chunk API) =====
             t0 = time.perf_counter()
@@ -176,7 +232,11 @@ def run_incremental_simulation(
 
             # ===== FULL RECOMPUTE =====
             t0 = time.perf_counter()
-            cumulative_users = parse_users_from_labeled(cumulative_labeled)
+            cumulative_users_raw = parse_users_from_labeled(cumulative_labeled)
+            cumulative_users = {
+                uid: inst for uid, inst in cumulative_users_raw.items()
+                if _entity_filter is None or uid in _entity_filter
+            }
             full_entity_parses += len(cumulative_users)
             all_ids = sorted(cumulative_users.keys())
             chunk_full_checks = len(list(combinations(all_ids, 2)))
@@ -306,6 +366,11 @@ def main():
     parser.add_argument(
         "--output", type=str, default="results/streaming/incremental_simulation_v2.json"
     )
+    parser.add_argument(
+        "--max-entities", type=int, default=None,
+        help="Subsample to first N unique entities (for cross-N cost model validation)."
+             " E.g. --max-entities 100 uses first 100 entities instead of all 231."
+    )
     args = parser.parse_args()
 
     task_indices = [int(t) for t in args.tasks.split(",")]
@@ -313,8 +378,11 @@ def main():
     print("Loading data...")
     _, labeled_context = load_data()
 
-    print(f"Running incremental simulation: tasks={task_indices}, chunks={args.num_chunks}")
-    results = run_incremental_simulation(labeled_context, task_indices, args.num_chunks)
+    print(f"Running incremental simulation: tasks={task_indices}, chunks={args.num_chunks}"
+          + (f", max_entities={args.max_entities}" if args.max_entities else ""))
+    results = run_incremental_simulation(
+        labeled_context, task_indices, args.num_chunks, max_entities=args.max_entities
+    )
 
     # Save results
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)

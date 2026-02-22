@@ -181,10 +181,20 @@ def model_sigma_free(k, a, b):
     return a * (1.0 - b / k)
 
 
-def model_sigma_param(X, a, b, c, d):
-    """σ-parameterized model: savings(k, σ) = a*(1-b/k) + c*σ*(1-d/k)"""
+def model_sigma_param(X, a, b, c, e):
+    """σ-parameterized model: savings(k, σ) = a*(1-b/k) + c*σ*(1+e/k), all params positive.
+
+    Reparameterized from the original (1-d/k) form where d went negative (d=-1.60).
+    The optimizer drove d negative because high-σ tasks show LARGER savings at small k,
+    requiring the σ term to grow as k→0. With d=-1.60, (1-d/k) = (1+1.60/k).
+
+    This e-parameterization makes the sign convention explicit and unambiguous:
+    e = |d| > 0, with bounds enforced. The paper formula is:
+        savings(k, σ) = a·(1 - b/k) + c·σ·(1 + e/k)
+    All four parameters (a, b, c, e) are non-negative.
+    """
     k, sigma = X
-    return a * (1.0 - b / k) + c * sigma * (1.0 - d / k)
+    return a * (1.0 - b / k) + c * sigma * (1.0 + e / k)
 
 
 def r_squared(y_true, y_pred):
@@ -247,23 +257,27 @@ def fit_models(data_points: list[dict]) -> dict:
         fit_free_ok = False
 
     # ---- Model (b): σ-parameterized ----
+    # Note: reparameterized to use e>0 explicitly, where e = |d_old|.
+    # Old form: c*σ*(1-d/k) with d=-1.60 → (1+1.60/k).
+    # New form: c*σ*(1+e/k) with e=+1.60 → same result, unambiguous sign.
+    # Bounds enforce all parameters non-negative.
     try:
         popt_param, pcov_param = curve_fit(
             model_sigma_param,
             (k_arr, sigma_arr),
             savings_arr,
             p0=[45.0, 1.0, 20.0, 1.0],
-            bounds=([0, 0, -500, -10], [200, 10, 500, 10]),
+            bounds=([0, 0, 0, 0], [200, 10, 500, 10]),
             maxfev=20000,
         )
-        a_p, b_p, c_p, d_p = popt_param
+        a_p, b_p, c_p, e_p = popt_param
         pred_param = model_sigma_param((k_arr, sigma_arr), *popt_param)
         r2_param = r_squared(savings_arr, pred_param)
         rmse_param = np.sqrt(np.mean((savings_arr - pred_param) ** 2))
         fit_param_ok = True
-    except Exception as e:
-        print(f"WARNING: σ-parameterized model fit failed: {e}")
-        a_p = b_p = c_p = d_p = np.nan
+    except Exception as exc:
+        print(f"WARNING: σ-parameterized model fit failed: {exc}")
+        a_p = b_p = c_p = e_p = np.nan
         r2_param = rmse_param = np.nan
         pred_param = np.full_like(savings_arr, np.nan)
         fit_param_ok = False
@@ -281,9 +295,9 @@ def fit_models(data_points: list[dict]) -> dict:
     else:
         print("    FIT FAILED")
 
-    print(f"\n(b) σ-parameterized model: savings(k,σ) = a*(1-b/k) + c*σ*(1-d/k)")
+    print(f"\n(b) σ-parameterized model: savings(k,σ) = a*(1-b/k) + c*σ*(1+e/k)  [all params ≥ 0]")
     if fit_param_ok:
-        print(f"    a = {a_p:.4f},  b = {b_p:.4f},  c = {c_p:.4f},  d = {d_p:.4f}")
+        print(f"    a = {a_p:.4f},  b = {b_p:.4f},  c = {c_p:.4f},  e = {e_p:.4f}")
         print(f"    R² = {r2_param:.4f},  RMSE = {rmse_param:.3f}%")
     else:
         print("    FIT FAILED")
@@ -318,8 +332,8 @@ def fit_models(data_points: list[dict]) -> dict:
             "rmse_pct": float(rmse_free),
         },
         "model_sigma": {
-            "formula": "savings(k,sigma) = a*(1-b/k) + c*sigma*(1-d/k)",
-            "params": {"a": float(a_p), "b": float(b_p), "c": float(c_p), "d": float(d_p)},
+            "formula": "savings(k,sigma) = a*(1-b/k) + c*sigma*(1+e/k)  [all params >= 0]",
+            "params": {"a": float(a_p), "b": float(b_p), "c": float(c_p), "e": float(e_p)},
             "r_squared": float(r2_param),
             "rmse_pct": float(rmse_param),
         },
@@ -715,7 +729,7 @@ def main():
     print(f"    R² = {mr['model_free']['r_squared']:.4f}")
     print(f"\n  Model (b) — σ-parameterized:")
     p = mr['model_sigma']['params']
-    print(f"    savings(k,σ) = {p['a']:.3f}*(1-{p['b']:.3f}/k) + {p['c']:.3f}*σ*(1-{p['d']:.3f}/k)")
+    print(f"    savings(k,σ) = {p['a']:.3f}*(1-{p['b']:.3f}/k) + {p['c']:.3f}*σ*(1+{p['e']:.3f}/k)")
     print(f"    R² = {mr['model_sigma']['r_squared']:.4f}")
     print(f"\n  R² improvement: {mr['r2_improvement']:+.4f}")
     ft = mr["f_test"]

@@ -137,15 +137,19 @@ class HistoryManager:
         # Build summary of old iterations
         summary = self._build_iteration_summary(old_messages, turn_number)
 
-        # Insert summary as a user message right after system prompt
+        # Insert summary as a prior model output, not user input.
+        # This produces proper alternating roles at the seam:
+        #   user(first_prompt) → assistant(summary) → user(continue) → assistant(recent) → ...
+        # Previously, summary_message had role="user", which produced two consecutive
+        # user messages and caused the model to treat its own prior computation as
+        # user-supplied input (semantically incorrect for trust/reliability).
         summary_message = {
-            "role": "user",
-            "content": summary,
-        }
-        # And a brief assistant acknowledgment
-        ack_message = {
             "role": "assistant",
-            "content": "I understand the prior computation state. Continuing with the current task.",
+            "content": summary,  # model's prior computation — assistant role is correct
+        }
+        ack_message = {
+            "role": "user",
+            "content": "Continue with the current task using the state described above.",
         }
 
         return system_messages + [summary_message, ack_message] + recent_messages
