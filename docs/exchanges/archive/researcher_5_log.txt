@@ -1,0 +1,34 @@
+All tasks complete. Here's a summary of what was accomplished in Iteration 5:
+
+---
+
+## Iteration 5 Summary
+
+### Critical Issues Fixed
+
+**1. INCREMENTAL_SYSTEM_PROMPT abstraction conflict (the blocking issue)**
+- Rewrote `INCREMENTAL_SYSTEM_PROMPT` in `prompts.py` to use `_incremental.process_chunk()` as the sole interface. The model now only implements `parse_entities()` and `check_pair()` — no more manual `entity_cache = {}` dict that shadows the retraction-capable primitives.
+
+**2. Pre-existing bug discovered and fixed: `persistent` flag not propagated to LocalREPL**
+- `_spawn_completion_context()` in `rlm.py` was creating `LocalREPL` without `persistent=True`, so `_incremental`, `EntityCache`, `PairTracker` were *never actually injected* into the REPL — even with `RLM(persistent=True)`. Old tests didn't catch this because scripted Turn 1 responses didn't call `_incremental`. Fixed with one line: `env_kwargs["persistent"] = self.persistent`.
+
+**3. `execute_code` underscore suppression fixed**
+- Added `_INJECTED_NAMES = frozenset({"_incremental"})` allowlist so model code can legitimately reassign `_incremental` (e.g., to reset state).
+
+**4. `_build_iteration_summary` now uses `ast.parse()`**
+- Replaced brittle `"=" in stripped` heuristic with proper AST walking of `ast.Assign`, `ast.FunctionDef`, etc.
+
+**5. Mock-LM tests updated and re-validated: 12/12 pass**
+- Scripted responses now use `_incremental.process_chunk()`. Total test suite: 172/172 pass.
+
+### Experiments Run
+
+| Experiment | Result | Key Finding |
+|-----------|--------|-------------|
+| k=4 break-even | 15.2–15.8% (symmetric), 9.6–10.1% (asymmetric) | Cost model accurate ±1pp; break-even at k≥4 confirmed |
+| 3-chunk temporal sweep | 4.1–5.1% savings for all temporal tasks | Dataset complete for σ-fitting |
+| σ-parameterized model (35 datapoints) | R²=0.919 (σ-free) → 0.936 (σ-param), p=0.025 | σ is now in a fitted formula, not just a gap analysis |
+| Per-entity retraction analysis | Task 5 ("before"): 2.6% bidirectional; Task 7 ("after"): 10.4% bidirectional | Temporal asymmetry mechanism confirmed: 4× ratio |
+
+### What's Next (Iteration 6)
+The live API experiment is now the mandatory first priority — the prompt is fixed, the pipeline is correctly configured, and mock-LM validation passed 12/12 with the new protocol.
