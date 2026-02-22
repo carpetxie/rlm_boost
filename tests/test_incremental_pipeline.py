@@ -248,10 +248,20 @@ class TestHistoryManager:
         # System (3) + summary (1) + ack (1) + last 2 iters (4) = 9
         assert len(pruned) == 9
 
-        # Check that summary message exists
+        # Check that summary message exists.
+        # Role-ordering fix (Iteration 6): summary = assistant (prior computation),
+        # ack = user ("Continue..."), producing correct alternating discourse.
         summary_msg = pruned[3]
-        assert summary_msg["role"] == "user"
+        assert summary_msg["role"] == "assistant", (
+            "Summary message should be role='assistant' (model's prior computation). "
+            "A role='user' summary incorrectly frames the model's own computation as user input."
+        )
         assert "PRIOR COMPUTATION SUMMARY" in summary_msg["content"]
+
+        # Verify the ack message follows with role='user'
+        ack_msg = pruned[4]
+        assert ack_msg["role"] == "user"
+        assert "Continue" in ack_msg["content"]
 
     def test_token_budget_prunes(self):
         # Use a very tight budget that forces pruning (each message is ~50 chars = ~12 tokens)
