@@ -1,0 +1,143 @@
+{
+  "model": "gpt-4o-mini",
+  "task_idx": 6,
+  "gold_pairs_count": 8911,
+  "iteration": 9,
+  "fixes": [
+    "token_tracking: use model_usage_summaries.total_input_tokens (not to_dict() with isinstance check)",
+    "condition_b: persistent=True + CHUNK_PROMPT_INCREMENTAL + env.locals extraction",
+    "condition_c: persistent=True + ORACLE_PROMPT_SINGLE + env.locals[pair_results]"
+  ],
+  "condition_a": {
+    "condition": "A_incremental",
+    "task_idx": 6,
+    "model": "gpt-4o-mini",
+    "num_chunks": 5,
+    "max_chunk_chars": 5000,
+    "compliance_rate": 1.0,
+    "f1_progression": [
+      {
+        "chunk": 1,
+        "chunk_idx": 0,
+        "compliant": true,
+        "chunks_processed": 1,
+        "pairs": 1128,
+        "pair_checks_total": 1128,
+        "f1": 0.1554,
+        "precision": 0.6915,
+        "recall": 0.0875,
+        "tp": 780,
+        "fp": 348,
+        "fn": 8131,
+        "input_tokens": 14757,
+        "output_tokens": 1984,
+        "elapsed_sec": 39.33,
+        "prune_count": 0
+      },
+      {
+        "chunk": 2,
+        "chunk_idx": 1,
+        "compliant": true,
+        "chunks_processed": 2,
+        "pairs": 2701,
+        "pair_checks_total": 3301,
+        "f1": 0.3257,
+        "precision": 0.7001,
+        "recall": 0.2122,
+        "tp": 1891,
+        "fp": 810,
+        "fn": 7020,
+        "input_tokens": 21584,
+        "output_tokens": 1943,
+        "elapsed_sec": 39.65,
+        "prune_count": 0
+      },
+      {
+        "chunk": 3,
+        "chunk_idx": 2,
+        "compliant": true,
+        "chunks_processed": 3,
+        "pairs": 4095,
+        "pair_checks_total": 6121,
+        "f1": 0.4153,
+        "precision": 0.6596,
+        "recall": 0.3031,
+        "tp": 2701,
+        "fp": 1394,
+        "fn": 6210,
+        "input_tokens": 11397,
+        "output_tokens": 806,
+        "elapsed_sec": 16.57,
+        "prune_count": 0
+      },
+      {
+        "chunk": 4,
+        "chunk_idx": 3,
+        "compliant": true,
+        "chunks_processed": 4,
+        "pairs": 5565,
+        "pair_checks_total": 9733,
+        "f1": 0.4588,
+        "precision": 0.5968,
+        "recall": 0.3727,
+        "tp": 3321,
+        "fp": 2244,
+        "fn": 5590,
+        "input_tokens": 21013,
+        "output_tokens": 1848,
+        "elapsed_sec": 38.65,
+        "prune_count": 0
+      },
+      {
+        "chunk": 5,
+        "chunk_idx": 4,
+        "compliant": true,
+        "chunks_processed": 5,
+        "pairs": 7140,
+        "pair_checks_total": 14023,
+        "f1": 0.477,
+        "precision": 0.5361,
+        "recall": 0.4296,
+        "tp": 3828,
+        "fp": 3312,
+        "fn": 5083,
+        "input_tokens": 25453,
+        "output_tokens": 2486,
+        "elapsed_sec": 53.2,
+        "prune_count": 0
+      }
+    ],
+    "final_f1": 0.477,
+    "final_precision": 0.5361,
+    "final_recall": 0.4296,
+    "total_input_tokens": 94204,
+    "total_output_tokens": 9067,
+    "per_turn_tokens": [
+      {
+        "turn": 1,
+        "input": 14757,
+        "output": 1984
+      },
+      {
+        "turn": 2,
+        "input": 21584,
+        "output": 1943
+      },
+      {
+        "turn": 3,
+        "input": 11397,
+        "output": 806
+      },
+      {
+        "turn": 4,
+        "input": 21013,
+        "output": 1848
+      },
+      {
+        "turn": 5,
+        "input": 25453,
+        "output": 2486
+      }
+    ]
+  }
+}
