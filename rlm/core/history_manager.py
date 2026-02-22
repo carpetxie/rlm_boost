@@ -52,6 +52,7 @@ class HistoryManager:
         self.max_messages = max_messages
         self.estimated_token_budget = estimated_token_budget
         self._turn_summaries: list[str] = []
+        self._prune_count: int = 0  # Iteration 9: telemetry — how many times pruning fired
 
     def prune(
         self,
@@ -87,6 +88,20 @@ class HistoryManager:
     def get_turn_summaries(self) -> list[str]:
         """Get all recorded turn summaries."""
         return self._turn_summaries.copy()
+
+    def get_stats(self) -> dict:
+        """Return telemetry statistics for the HistoryManager.
+
+        Iteration 9: exposes prune_count so callers can verify whether pruning
+        fired and at which turn. Critical for diagnosing pruning–deduplication
+        interaction in multi-turn persistent mode.
+        """
+        return {
+            "prune_count": self._prune_count,
+            "turn_summaries_count": len(self._turn_summaries),
+            "strategy": self.strategy,
+            "max_recent_iterations": self.max_recent_iterations,
+        }
 
     def _prune_sliding_window(self, message_history: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Keep system prompt + last N iteration pairs.
@@ -131,6 +146,9 @@ class HistoryManager:
         if len(iteration_messages) <= max_iter_messages:
             # No pruning needed
             return message_history
+
+        # Pruning will fire — increment telemetry counter (Iteration 9)
+        self._prune_count += 1
 
         # Split into old (to summarize) and recent (to keep)
         old_messages = iteration_messages[:-max_iter_messages]
