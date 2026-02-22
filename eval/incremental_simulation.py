@@ -2,18 +2,18 @@
 Incremental Computation Simulation — End-to-End Demonstration.
 
 This script simulates the full incremental pipeline WITHOUT API calls,
-using the actual IncrementalState primitives. It demonstrates:
+using the actual IncrementalState.process_chunk() API. It demonstrates:
 
 1. Processing OOLONG-Pairs context in chunks using EntityCache + PairTracker
-2. Comparing incremental pair-check counts vs full recomputation
-3. Measuring retraction overhead for non-monotonic tasks (Task 19)
-4. Computing exact token savings from caching entity classifications
+2. Real task conditions via _check_pair_condition (not simplified matching)
+3. Correctness validation: incremental pairs == full-recompute pairs after each chunk
+4. Measuring retraction overhead for non-monotonic tasks
+5. Per-chunk savings breakdown
 
-This is a deterministic experiment — no API keys needed. It validates
-that the incremental architecture achieves the theoretical savings.
+This is a deterministic experiment — no API keys needed.
 
 Usage:
-  python eval/incremental_simulation.py --tasks 1,19 --num-chunks 5
+  python eval/incremental_simulation.py --tasks 1,3,6,19 --num-chunks 5
 """
 
 import argparse
@@ -21,6 +21,7 @@ import json
 import re
 import sys
 import time
+from itertools import combinations
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -36,22 +37,16 @@ def load_data(context_len: int = 32768):
     return corpus["context_window_text"], corpus["context_window_text_with_labels"]
 
 
-def parse_users_from_labeled(labeled_text: str) -> dict[str, dict]:
+def parse_users_from_labeled(labeled_text: str) -> dict[int, list[dict]]:
     """Parse user entries from labeled OOLONG-Pairs text.
 
-    Returns dict: {user_id: {"instances": [{"label": str, "text": str}], ...}}
+    Returns dict: {user_id: [{"date": datetime|None, "label": str}, ...]}
+    This preserves the full instance data needed for real task checking
+    (including dates for temporal constraints in tasks 4,5,7,9,10).
     """
     from eval.utils import _parse_labeled_context
 
-    raw = _parse_labeled_context(labeled_text)
-    users = {}
-    for uid, instances in raw.items():
-        users[uid] = {
-            "instances": instances,
-            "labels": [inst["label"] for inst in instances],
-            "n_instances": len(instances),
-        }
-    return users
+    return _parse_labeled_context(labeled_text)
 
 
 def split_labeled_context(labeled_context: str, num_chunks: int) -> list[str]:
@@ -95,14 +90,18 @@ def split_labeled_context(labeled_context: str, num_chunks: int) -> list[str]:
 def make_task_checker(task_idx: int):
     """Create a pair checker function for a given OOLONG-Pairs task.
 
-    This replicates the gold-standard pair checking logic from the benchmark,
-    but operates on cached entity attributes rather than raw text.
+    Uses the real _check_pair_condition from eval/utils.py, which implements
+    the exact gold-standard conditions including temporal constraints,
+    cardinality ("exactly N"), and asymmetric role requirements.
+
+    The checker operates on instance lists: [{"date": datetime, "label": str}, ...]
+    stored as entity attributes in the EntityCache.
     """
     from eval.utils import _check_pair_condition
 
     def checker(attrs1: dict, attrs2: dict) -> bool:
-        """Check if two users form a valid pair based on their cached attributes."""
-        return _check_pair_condition(attrs1, attrs2, task_idx)
+        """Check if two users form a valid pair based on their cached instances."""
+        return _check_pair_condition(attrs1["instances"], attrs2["instances"], task_idx)
 
     return checker
 
@@ -112,14 +111,14 @@ def run_incremental_simulation(
     task_indices: list[int],
     num_chunks: int,
 ) -> dict:
-    """Run the full incremental simulation.
+    """Run the full incremental simulation with correctness validation.
 
-    For each task, processes context in chunks and compares:
-    1. Incremental: uses EntityCache + PairTracker, processes only new entities
-    2. Full recompute: processes all entities from scratch at each chunk
+    For each task, processes context in chunks and:
+    1. Uses IncrementalState.process_chunk() API (not manual reimplementation)
+    2. Uses real task conditions via _check_pair_condition
+    3. Validates: incremental pairs == full-recompute pairs after each chunk
+    4. Measures pair-check savings and retraction overhead
     """
-    from itertools import combinations
-
     chunks = split_labeled_context(labeled_context, num_chunks)
     results = {}
 
@@ -128,7 +127,9 @@ def run_incremental_simulation(
         print(f"Task {task_idx}")
         print(f"{'=' * 60}")
 
-        # --- Incremental mode ---
+        checker = make_task_checker(task_idx)
+
+        # --- Incremental mode using process_chunk() API ---
         incr_state = IncrementalState()
         incr_pair_checks = 0
         incr_entity_parses = 0
@@ -140,93 +141,38 @@ def run_incremental_simulation(
         full_timings = []
 
         cumulative_labeled = ""
-        all_users_incremental: dict[str, dict] = {}
+        # Track merged instances for entities that span chunks
+        all_user_instances: dict[int, list[dict]] = {}
+
+        correctness_ok = True
+        chunk_details = []
 
         for chunk_i, chunk in enumerate(chunks):
             cumulative_labeled += chunk
             chunk_users = parse_users_from_labeled(chunk)
 
-            # ===== INCREMENTAL =====
+            # ===== INCREMENTAL (via process_chunk API) =====
             t0 = time.perf_counter()
 
-            # Only parse NEW users
-            new_user_entities = {}
-            updated_user_entities = {}
-            for uid, data in chunk_users.items():
-                attrs = {
-                    "labels": data["labels"],
-                    "n_instances": data["n_instances"],
-                }
-                if uid in all_users_incremental:
-                    # User seen before — merge instances
-                    old = all_users_incremental[uid]
-                    merged_labels = old["labels"] + data["labels"]
-                    merged_attrs = {
-                        "labels": merged_labels,
-                        "n_instances": len(merged_labels),
-                    }
-                    updated_user_entities[uid] = merged_attrs
+            # Build entity dict for this chunk:
+            # For new users: store their instances
+            # For returning users: merge instances and mark as update
+            chunk_entities = {}
+            for uid, instances in chunk_users.items():
+                if uid in all_user_instances:
+                    # Merge: combine old + new instances
+                    merged = all_user_instances[uid] + instances
+                    all_user_instances[uid] = merged
+                    chunk_entities[uid] = {"instances": merged}
                 else:
-                    new_user_entities[uid] = attrs
+                    all_user_instances[uid] = instances
+                    chunk_entities[uid] = {"instances": instances}
 
-            # Update tracking
-            for uid, attrs in new_user_entities.items():
-                all_users_incremental[uid] = attrs
-            for uid, attrs in updated_user_entities.items():
-                all_users_incremental[uid] = attrs
+            # Use the actual process_chunk() API
+            chunk_stats = incr_state.process_chunk(chunk_i, chunk_entities, pair_checker=checker)
 
-            # Add new entities to cache
-            for uid, attrs in new_user_entities.items():
-                incr_state.entity_cache.add(uid, attrs, chunk_i)
-                incr_entity_parses += 1
-
-            # Update existing entities (triggers retraction)
-            for uid, attrs in updated_user_entities.items():
-                incr_state.entity_cache.add(uid, attrs, chunk_i)
-                incr_entity_parses += 1
-
-            # Retract pairs for updated entities
-            retracted = set()
-            for uid in updated_user_entities:
-                r = incr_state.pair_tracker.retract_entity(uid)
-                retracted |= r
-
-            # Check new pairs incrementally
-            existing_ids = incr_state.entity_cache.get_ids() - set(new_user_entities.keys())
-            chunk_pair_checks = 0
-
-            # New × existing
-            for new_id in new_user_entities:
-                new_attrs = incr_state.entity_cache.get(new_id)
-                for existing_id in existing_ids:
-                    existing_attrs = incr_state.entity_cache.get(existing_id)
-                    chunk_pair_checks += 1
-                    # Simplified pair check: same label overlap
-                    if _simple_pair_match(new_attrs, existing_attrs, task_idx):
-                        incr_state.pair_tracker.add_pair(new_id, existing_id)
-
-            # New × new
-            new_list = sorted(new_user_entities.keys())
-            for i, id1 in enumerate(new_list):
-                for id2 in new_list[i + 1 :]:
-                    chunk_pair_checks += 1
-                    a1 = incr_state.entity_cache.get(id1)
-                    a2 = incr_state.entity_cache.get(id2)
-                    if _simple_pair_match(a1, a2, task_idx):
-                        incr_state.pair_tracker.add_pair(id1, id2)
-
-            # Re-evaluate retracted pairs
-            reevals = 0
-            for p in retracted:
-                a1 = incr_state.entity_cache.get(p[0])
-                a2 = incr_state.entity_cache.get(p[1])
-                if a1 and a2:
-                    chunk_pair_checks += 1
-                    reevals += 1
-                    if _simple_pair_match(a1, a2, task_idx):
-                        incr_state.pair_tracker.add_pair(p[0], p[1])
-
-            incr_pair_checks += chunk_pair_checks
+            incr_pair_checks += chunk_stats["pair_checks"]
+            incr_entity_parses += chunk_stats["new_entities"] + chunk_stats["updated_entities"]
             t1 = time.perf_counter()
             incr_timings.append(t1 - t0)
 
@@ -237,20 +183,69 @@ def run_incremental_simulation(
             all_ids = sorted(cumulative_users.keys())
             chunk_full_checks = len(list(combinations(all_ids, 2)))
             full_pair_checks += chunk_full_checks
+
+            # Compute full-recompute pairs for correctness check
+            full_pairs_set = set()
+            for uid1, uid2 in combinations(all_ids, 2):
+                from eval.utils import _check_pair_condition
+
+                if _check_pair_condition(cumulative_users[uid1], cumulative_users[uid2], task_idx):
+                    full_pairs_set.add((min(uid1, uid2), max(uid1, uid2)))
+
             t1 = time.perf_counter()
             full_timings.append(t1 - t0)
 
+            # ===== CORRECTNESS VALIDATION =====
+            incr_pairs_set = incr_state.pair_tracker.get_pairs()
+            # Convert to comparable format (pairs may use int or str keys)
+            incr_pairs_normalized = set()
+            for p in incr_pairs_set:
+                incr_pairs_normalized.add((min(p[0], p[1]), max(p[0], p[1])))
+            full_pairs_normalized = set()
+            for p in full_pairs_set:
+                full_pairs_normalized.add((min(p[0], p[1]), max(p[0], p[1])))
+
+            chunk_correct = incr_pairs_normalized == full_pairs_normalized
+            if not chunk_correct:
+                correctness_ok = False
+                only_incr = incr_pairs_normalized - full_pairs_normalized
+                only_full = full_pairs_normalized - incr_pairs_normalized
+                print(
+                    f"  *** CORRECTNESS FAILURE at chunk {chunk_i + 1}: "
+                    f"incr={len(incr_pairs_normalized)}, full={len(full_pairs_normalized)}, "
+                    f"only_incr={len(only_incr)}, only_full={len(only_full)}"
+                )
+
             savings = (
-                (1 - chunk_pair_checks / chunk_full_checks) * 100 if chunk_full_checks > 0 else 0
+                (1 - chunk_stats["pair_checks"] / chunk_full_checks) * 100
+                if chunk_full_checks > 0
+                else 0
             )
+
+            chunk_detail = {
+                "chunk": chunk_i + 1,
+                "new_entities": chunk_stats["new_entities"],
+                "updated_entities": chunk_stats["updated_entities"],
+                "retracted_pairs": chunk_stats["retracted_pairs"],
+                "incr_checks": chunk_stats["pair_checks"],
+                "full_checks": chunk_full_checks,
+                "savings_pct": round(savings, 1),
+                "incr_pairs": len(incr_pairs_normalized),
+                "full_pairs": len(full_pairs_normalized),
+                "correct": chunk_correct,
+            }
+            chunk_details.append(chunk_detail)
 
             print(
                 f"  Chunk {chunk_i + 1}/{num_chunks}: "
-                f"new={len(new_user_entities)}, updated={len(updated_user_entities)}, "
-                f"retracted={len(retracted)}, reeval={reevals}, "
-                f"incr_checks={chunk_pair_checks:,}, full_checks={chunk_full_checks:,}, "
+                f"new={chunk_stats['new_entities']}, "
+                f"updated={chunk_stats['updated_entities']}, "
+                f"retracted={chunk_stats['retracted_pairs']}, "
+                f"incr_checks={chunk_stats['pair_checks']:,}, "
+                f"full_checks={chunk_full_checks:,}, "
                 f"savings={savings:.1f}%, "
-                f"pairs={len(incr_state.pair_tracker)}"
+                f"pairs={chunk_stats['total_pairs']}, "
+                f"correct={'YES' if chunk_correct else 'NO'}"
             )
 
         # Summary
@@ -261,29 +256,37 @@ def run_incremental_simulation(
             (1 - incr_entity_parses / full_entity_parses) * 100 if full_entity_parses > 0 else 0
         )
 
-        print("\n  Summary:")
+        final_incr_pairs = len(incr_state.pair_tracker.get_pairs())
+        stats = incr_state.get_stats()
+
+        print(f"\n  Summary:")
         print(
-            f"    Incremental pair checks: {incr_pair_checks:,} vs Full: {full_pair_checks:,} ({total_savings:.1f}% savings)"
+            f"    Incremental pair checks: {incr_pair_checks:,} vs "
+            f"Full: {full_pair_checks:,} ({total_savings:.1f}% savings)"
         )
         print(
-            f"    Incremental entity parses: {incr_entity_parses:,} vs Full: {full_entity_parses:,} ({entity_savings:.1f}% savings)"
+            f"    Incremental entity parses: {incr_entity_parses:,} vs "
+            f"Full: {full_entity_parses:,} ({entity_savings:.1f}% savings)"
         )
-        print(f"    Total retractions: {incr_state.pair_tracker.retraction_count}")
-        print(f"    Final pairs: {len(incr_state.pair_tracker)}")
+        print(f"    Total retractions: {stats['total_retractions']}")
+        print(f"    Final pairs: {final_incr_pairs}")
+        print(f"    Correctness: {'ALL CHUNKS PASSED' if correctness_ok else 'FAILURES DETECTED'}")
         print(
-            f"    Incremental time: {sum(incr_timings):.3f}s, Full time: {sum(full_timings):.3f}s"
+            f"    Incremental time: {sum(incr_timings):.3f}s, "
+            f"Full time: {sum(full_timings):.3f}s"
         )
 
         results[task_idx] = {
             "task_id": task_idx,
             "num_chunks": num_chunks,
+            "correctness": correctness_ok,
             "incremental": {
                 "pair_checks": incr_pair_checks,
                 "entity_parses": incr_entity_parses,
-                "retractions": incr_state.pair_tracker.retraction_count,
-                "final_pairs": len(incr_state.pair_tracker),
+                "retractions": stats["total_retractions"],
+                "final_pairs": final_incr_pairs,
                 "total_time": sum(incr_timings),
-                "per_chunk": incr_state.chunk_log if incr_state.chunk_log else [],
+                "per_chunk": incr_state.chunk_log,
             },
             "full_recompute": {
                 "pair_checks": full_pair_checks,
@@ -291,37 +294,21 @@ def run_incremental_simulation(
                 "total_time": sum(full_timings),
             },
             "savings": {
-                "pair_check_pct": total_savings,
-                "entity_parse_pct": entity_savings,
+                "pair_check_pct": round(total_savings, 2),
+                "entity_parse_pct": round(entity_savings, 2),
             },
+            "chunk_details": chunk_details,
         }
 
     return results
 
 
-def _simple_pair_match(attrs1: dict, attrs2: dict, task_idx: int) -> bool:
-    """Simplified pair matching based on label overlap.
-
-    Tasks 1-10 (symmetric): both users share at least one label
-    Tasks 11-20 (asymmetric): user1 has label from set A, user2 has label from set B
-    """
-    labels1 = set(attrs1.get("labels", []))
-    labels2 = set(attrs2.get("labels", []))
-
-    if task_idx <= 10:
-        # Symmetric: at least one shared label
-        return bool(labels1 & labels2)
-    else:
-        # Asymmetric: simplified — different label sets
-        return bool(labels1 - labels2) and bool(labels2 - labels1)
-
-
 def main():
     parser = argparse.ArgumentParser(description="Incremental Computation Simulation")
-    parser.add_argument("--tasks", type=str, default="1,3,6,8,19")
+    parser.add_argument("--tasks", type=str, default="1,3,6,19")
     parser.add_argument("--num-chunks", type=int, default=5)
     parser.add_argument(
-        "--output", type=str, default="results/streaming/incremental_simulation.json"
+        "--output", type=str, default="results/streaming/incremental_simulation_v2.json"
     )
     args = parser.parse_args()
 
@@ -344,9 +331,10 @@ def main():
     print("AGGREGATE RESULTS")
     print("=" * 80)
     print(
-        f"{'Task':>5} | {'Incr Checks':>12} | {'Full Checks':>12} | {'Savings':>8} | {'Retractions':>11} | {'Pairs':>6}"
+        f"{'Task':>5} | {'Incr Checks':>12} | {'Full Checks':>12} | "
+        f"{'Savings':>8} | {'Retractions':>11} | {'Pairs':>6} | {'Correct':>7}"
     )
-    print("-" * 70)
+    print("-" * 80)
     for task_idx, r in sorted(results.items()):
         print(
             f"{task_idx:>5} | "
@@ -354,8 +342,13 @@ def main():
             f"{r['full_recompute']['pair_checks']:>12,} | "
             f"{r['savings']['pair_check_pct']:>7.1f}% | "
             f"{r['incremental']['retractions']:>11} | "
-            f"{r['incremental']['final_pairs']:>6}"
+            f"{r['incremental']['final_pairs']:>6} | "
+            f"{'YES' if r['correctness'] else 'NO':>7}"
         )
+
+    # Print correctness summary
+    all_correct = all(r["correctness"] for r in results.values())
+    print(f"\nOverall correctness: {'ALL PASSED' if all_correct else 'FAILURES DETECTED'}")
 
 
 if __name__ == "__main__":
