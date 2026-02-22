@@ -72,8 +72,30 @@ class EntityCache:
         return {eid: e["attributes"] for eid, e in self._entities.items()}
 
     def get_from_chunk(self, chunk_index: int) -> set[str]:
-        """Get entity IDs first seen in a given chunk."""
+        """Get entity IDs that were added OR updated in a given chunk.
+
+        Iteration 10 docstring fix: this method was previously documented as
+        "entity IDs first seen in chunk_index" but `add()` unconditionally writes
+        to `_by_chunk[chunk_index]` for both new entities and updates — so an entity
+        first seen in chunk 0 but updated in chunk 3 appears in both
+        `_by_chunk[0]` and `_by_chunk[3]`.
+
+        For entities introduced for the first time in a specific chunk, use
+        `get_new_in_chunk()` which filters by `source_chunk`.
+        """
         return self._by_chunk.get(chunk_index, set())
+
+    def get_new_in_chunk(self, chunk_index: int) -> set[str]:
+        """Get entity IDs first introduced (source_chunk == chunk_index).
+
+        Unlike get_from_chunk(), this excludes entities that existed before
+        chunk_index and were merely updated in it. Useful for computing only
+        the truly new entities from a given chunk without counting updates.
+        """
+        return {
+            eid for eid in self._by_chunk.get(chunk_index, set())
+            if self._entities.get(eid, {}).get("source_chunk") == chunk_index
+        }
 
     def get_ids(self) -> set[str]:
         """Get all entity IDs."""
@@ -102,7 +124,11 @@ class PairTracker:
     def __init__(self):
         self._pairs: set[tuple[str, str]] = set()
         self._entity_pairs: dict[str, set[tuple[str, str]]] = {}  # inverted index
-        self._retracted: set[tuple[str, str]] = set()  # pairs removed by retraction
+        # Pairs removed by retraction but not yet re-added. Diagnostic only —
+        # correctness does not depend on this set. Note: permanently-invalidated
+        # pairs accumulate here indefinitely (O(n²) worst case at large scale with
+        # high retraction rates). Call clear_retracted() to reclaim memory if needed.
+        self._retracted: set[tuple[str, str]] = set()
         self._retraction_count: int = 0
 
     def add_pair(self, id1: str, id2: str) -> None:
@@ -162,8 +188,23 @@ class PairTracker:
 
     @property
     def retracted_pairs(self) -> set[tuple[str, str]]:
-        """Pairs that were retracted and not yet re-added."""
+        """Pairs retracted and not yet re-added. Diagnostic only.
+
+        Note: permanently-invalidated pairs accumulate here until
+        clear_retracted() is called. Use retraction_count for a
+        bounded telemetry metric.
+        """
         return self._retracted.copy()
+
+    def clear_retracted(self) -> int:
+        """Clear the retracted-pairs diagnostic set and return count cleared.
+
+        Call periodically to prevent unbounded memory growth in long-running
+        streaming scenarios with high retraction rates.
+        """
+        n = len(self._retracted)
+        self._retracted.clear()
+        return n
 
     def __len__(self) -> int:
         return len(self._pairs)
