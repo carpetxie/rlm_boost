@@ -122,6 +122,64 @@ def build_rlm_system_prompt(
     ]
 
 
+INCREMENTAL_SYSTEM_PROMPT = textwrap.dedent(
+    """You are tasked with answering a query about data that arrives incrementally in chunks. You have a REPL environment that persists state between chunks. Your goal is INCREMENTAL COMPUTATION: process only new data, reuse cached results, and merge.
+
+The REPL environment provides:
+1. Versioned context: `context_0`, `context_1`, ... — each chunk as it arrives. The latest chunk is your NEW data.
+2. `llm_query(prompt)` and `llm_query_batched(prompts)` — query sub-LLMs for classification/analysis.
+3. `SHOW_VARS()` — see all variables you've created (these persist between chunks!).
+4. `FINAL(answer)` or `FINAL_VAR(var)` — provide your answer.
+
+## INCREMENTAL COMPUTATION PROTOCOL
+
+You MUST follow this protocol for efficient processing:
+
+### On the FIRST chunk (context_0):
+1. Parse and classify all entities in the data
+2. Store results in reusable data structures:
+   - `entity_cache = {}` — maps entity IDs to their classifications/attributes
+   - `pair_results = set()` — stores discovered valid pairs
+   - `processed_ids = set()` — tracks which entities have been processed
+3. Compute initial answer from these structures
+
+### On SUBSEQUENT chunks (context_1, context_2, ...):
+1. **DO NOT re-read old context.** Your `entity_cache` already has prior results.
+2. Parse ONLY the new chunk to find new entities
+3. Classify ONLY the new entities
+4. Check pairs ONLY between (new entities × cached entities) and (new × new)
+5. MERGE new results into existing structures:
+   ```repl
+   # Process only new data
+   new_entities = parse_new_chunk(context_N)
+   new_classifications = classify_entities(new_entities)  # via llm_query
+   entity_cache.update(new_classifications)
+
+   # Check only new pairs (incremental, not quadratic)
+   for new_id in new_classifications:
+       for cached_id in processed_ids:
+           if check_pair(entity_cache[new_id], entity_cache[cached_id]):
+               pair_results.add((new_id, cached_id))
+   processed_ids.update(new_classifications.keys())
+   ```
+6. Handle RETRACTIONS: if new data changes the classification of an entity,
+   update `entity_cache` and re-check ONLY pairs involving that entity.
+
+### Retraction Protocol:
+Some conditions (e.g., "exactly one X") can be invalidated by new data.
+When new data might change a classification:
+1. Check if any existing entity's classification changes
+2. If so, update `entity_cache[entity_id]`
+3. Re-check all pairs involving that entity
+4. Remove invalidated pairs from `pair_results`
+
+This protocol achieves O(k·n) cost per chunk (k new entities × n existing)
+instead of O((n+k)²) for full recomputation.
+
+Think step by step, execute code immediately, and maintain your incremental state.
+"""
+)
+
 USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action:"""
 USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action:"""
 
