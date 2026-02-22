@@ -226,8 +226,16 @@ class RLM:
                     if isinstance(environment, SupportsPersistence)
                     else 0
                 )
+
+                # Collect cached variable info for incremental computation
+                cached_vars = None
+                if self.persistent and context_count > 1 and i == 0:
+                    # On the first iteration of a non-first turn, tell the model
+                    # about existing REPL state so it can build incrementally
+                    cached_vars = self._get_cached_vars(environment)
+
                 current_prompt = message_history + [
-                    build_user_prompt(root_prompt, i, context_count, history_count)
+                    build_user_prompt(root_prompt, i, context_count, history_count, cached_vars)
                 ]
 
                 iteration: RLMIteration = self._completion_turn(
@@ -328,7 +336,7 @@ class RLM:
         """
         current_prompt = message_history + [
             {
-                "role": "assistant",
+                "role": "user",
                 "content": "Please provide a final answer to the user's question based on the information provided.",
             }
         ]
@@ -378,6 +386,24 @@ class RLM:
                 f"add_context(), and get_context_count(). "
                 f"Supported environments: {sorted(persistent_supported_environments)}"
             )
+
+    @staticmethod
+    def _get_cached_vars(environment: BaseEnv) -> dict[str, str] | None:
+        """Get a summary of cached variables in the REPL environment.
+
+        Returns a dict of {variable_name: type_name} for user-defined variables.
+        This enables incremental computation: the model knows what's already
+        been computed and can build on it rather than re-computing from scratch.
+        """
+        if not hasattr(environment, "locals"):
+            return None
+
+        cached = {}
+        for name, value in environment.locals.items():
+            if name.startswith("_") or name.startswith("context") or name.startswith("history"):
+                continue  # Skip internal, context, and history vars
+            cached[name] = type(value).__name__
+        return cached if cached else None
 
     @staticmethod
     def _env_supports_persistence(env: BaseEnv) -> bool:
