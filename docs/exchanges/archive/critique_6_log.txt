@@ -1,0 +1,27 @@
+The Iteration 6 critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key findings:
+
+---
+
+## Critique Summary — Iteration 6
+
+**Overall**: Iteration 5 fully resolved all nine items I raised. The pipeline is now mechanically correct and uses the `_incremental.process_chunk()` interface consistently. Three new issues are identified.
+
+### Scores
+| Criterion | Score | Delta |
+|-----------|-------|-------|
+| Novelty | 7/10 | +0 |
+| Technical Soundness | 7/10 | **+1** |
+| Benchmark Performance | 6/10 | +0 |
+| Scalability | 5/10 | +0 |
+| Research Maturity | 6/10 | +0 |
+
+### Three New Code/Architecture Issues
+
+1. **O(u·n) complexity gap** — the "updated × all" loop in `process_chunk()` is O(u × n) per chunk, not O(k·n). At N=10K entities with 10% update rate, this produces 10M pair checks per chunk — worse than full recompute. The scalability claim must be corrected to O((k+u)·n).
+
+2. **Role-ordering defect in `_prune_with_summary`** — the pruned history produces consecutive `(user, user)` and `(assistant, assistant)` message pairs at the seam, making the "PRIOR COMPUTATION SUMMARY" appear as user input rather than prior model output. Fix: swap `summary_message` to `"assistant"` role and `ack_message` to `"user"`.
+
+3. **σ model sign inconsistency** — `model_sigma_param` uses `c*σ*(1-d/k)` with d=-1.60, producing `(1+1.60/k)`. Reparameterize to `(1+e/k)` with e>0 to eliminate sign ambiguity in the paper formula.
+
+### The One Big Thing
+**Run the live API experiment and use the compliance rate to lock in the paper's contribution framing.** After six iterations, either: (A) compliance ≥50% → empirical paper; or (B) compliance <50% → theoretical architecture paper that motivates fine-tuning as a prerequisite. Both are publishable. The wrong path is maintaining the "empirical system" framing without the data.
