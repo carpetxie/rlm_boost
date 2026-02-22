@@ -289,14 +289,155 @@ def _all_before(instances, label, cutoff: datetime):
     )
 
 
-def _qualifies(user_instances, task_idx: int) -> bool:
-    """Return True if a single user qualifies for the relevant sub-condition of a task."""
-    i = user_instances
+def _check_pair_condition(instances_a: list[dict], instances_b: list[dict], task_idx: int) -> bool:
+    """Check whether a pair of users qualifies for a given OOLONG-Pairs task.
 
-    # For symmetric tasks (1–10) we check one side; the caller checks both sides.
-    # For asymmetric tasks (11–20) this is called with the specific role.
-    # This function is NOT used directly — see compute_gold_pairs instead.
-    raise NotImplementedError("Use compute_gold_pairs directly.")
+    Args:
+        instances_a: List of {"date": datetime|None, "label": str} for user A
+        instances_b: List of {"date": datetime|None, "label": str} for user B
+        task_idx: 1-indexed task number (1-20)
+
+    Returns:
+        True if the pair qualifies for the task condition.
+    """
+    a, b = instances_a, instances_b
+
+    # Temporal cutoffs used in tasks 4, 5, 7, 9, 10
+    JAN6_2023 = datetime(2023, 1, 6)
+    MAR15_2023 = datetime(2023, 3, 15)
+    FEB1_2023 = datetime(2023, 2, 1)
+    APR10_2023 = datetime(2023, 4, 10)
+    MAY20_2023 = datetime(2023, 5, 20)
+
+    if task_idx == 1:
+        return (
+            (_has(a, "numeric value") or _has(a, "location"))
+            and (_has(b, "numeric value") or _has(b, "location"))
+        )
+    elif task_idx == 2:
+        return (
+            (_has(a, "entity") or _has(a, "human being"))
+            and (_has(b, "entity") or _has(b, "human being"))
+        )
+    elif task_idx == 3:
+        return (
+            (_has(a, "description and abstract concept") or _has(a, "abbreviation"))
+            and (_has(b, "description and abstract concept") or _has(b, "abbreviation"))
+        )
+    elif task_idx == 4:
+        def q4(u):
+            return (
+                (_has(u, "human being") or _has(u, "location"))
+                and _all_after(u, "human being", JAN6_2023)
+            )
+        return q4(a) and q4(b)
+    elif task_idx == 5:
+        def q5(u):
+            return (
+                (_has(u, "entity") or _has(u, "numeric value"))
+                and _all_before(u, "entity", MAR15_2023)
+            )
+        return q5(a) and q5(b)
+    elif task_idx == 6:
+        return (
+            (_has(a, "location") or _has(a, "abbreviation"))
+            and (_has(b, "location") or _has(b, "abbreviation"))
+        )
+    elif task_idx == 7:
+        def q7(u):
+            return (
+                (_has(u, "description and abstract concept") or _has(u, "numeric value"))
+                and _all_after(u, "numeric value", FEB1_2023)
+            )
+        return q7(a) and q7(b)
+    elif task_idx == 8:
+        return (
+            (_has(a, "human being") or _has(a, "description and abstract concept"))
+            and (_has(b, "human being") or _has(b, "description and abstract concept"))
+        )
+    elif task_idx == 9:
+        def q9(u):
+            return (
+                (_has(u, "entity") or _has(u, "location"))
+                and _all_after(u, "location", APR10_2023)
+            )
+        return q9(a) and q9(b)
+    elif task_idx == 10:
+        def q10(u):
+            return (
+                (_has(u, "numeric value") or _has(u, "abbreviation"))
+                and _all_before(u, "abbreviation", MAY20_2023)
+            )
+        return q10(a) and q10(b)
+    elif task_idx == 11:
+        def role11_a(u):
+            return _has(u, "entity") and _has(u, "abbreviation")
+        def role11_b(u):
+            return _count(u, "entity") == 1
+        return (role11_a(a) and role11_b(b)) or (role11_a(b) and role11_b(a))
+    elif task_idx == 12:
+        def role12_a(u):
+            return _count(u, "numeric value") >= 2
+        def role12_b(u):
+            return _has(u, "location") and _has(u, "human being")
+        return (role12_a(a) and role12_b(b)) or (role12_a(b) and role12_b(a))
+    elif task_idx == 13:
+        def role13_a(u):
+            return _count(u, "description and abstract concept") == 1
+        def role13_b(u):
+            return _has(u, "abbreviation") and _has(u, "entity")
+        return (role13_a(a) and role13_b(b)) or (role13_a(b) and role13_b(a))
+    elif task_idx == 14:
+        def role14_a(u):
+            return _has(u, "human being") and _has(u, "numeric value")
+        def role14_b(u):
+            return _count(u, "location") == 2
+        return (role14_a(a) and role14_b(b)) or (role14_a(b) and role14_b(a))
+    elif task_idx == 15:
+        def role15_a(u):
+            return _has(u, "entity") and _has(u, "location") and _has(u, "abbreviation")
+        def role15_b(u):
+            return _count(u, "numeric value") == 1
+        return (role15_a(a) and role15_b(b)) or (role15_a(b) and role15_b(a))
+    elif task_idx == 16:
+        def role16_a(u):
+            return _has(u, "description and abstract concept") and _has(u, "human being")
+        def role16_b(u):
+            return _count(u, "entity") >= 2 and _count(u, "abbreviation") == 1
+        return (role16_a(a) and role16_b(b)) or (role16_a(b) and role16_b(a))
+    elif task_idx == 17:
+        def role17_a(u):
+            return _count(u, "numeric value") == 1
+        def role17_b(u):
+            return _has(u, "location") and _has(u, "description and abstract concept")
+        return (role17_a(a) and role17_b(b)) or (role17_a(b) and role17_b(a))
+    elif task_idx == 18:
+        def role18_a(u):
+            return _has(u, "abbreviation") and _count(u, "human being") == 1
+        def role18_b(u):
+            return _has(u, "entity") and _has(u, "numeric value")
+        return (role18_a(a) and role18_b(b)) or (role18_a(b) and role18_b(a))
+    elif task_idx == 19:
+        def role19_a(u):
+            return _count(u, "location") >= 2 and _has(u, "entity")
+        def role19_b(u):
+            return (
+                _count(u, "description and abstract concept") == 1
+                and _count(u, "abbreviation") == 1
+            )
+        return (role19_a(a) and role19_b(b)) or (role19_a(b) and role19_b(a))
+    elif task_idx == 20:
+        def role20_a(u):
+            return _has(u, "numeric value") and _has(u, "human being")
+        def role20_b(u):
+            return (
+                _has(u, "location")
+                and _has(u, "entity")
+                and _count(u, "abbreviation") == 1
+            )
+        return (role20_a(a) and role20_b(b)) or (role20_a(b) and role20_b(a))
+    else:
+        raise ValueError(f"Unknown task index: {task_idx}")
 
 
 def compute_gold_pairs(labeled_context: str, task_idx: int) -> str:
