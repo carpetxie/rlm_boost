@@ -257,8 +257,10 @@ class HistoryManager:
             role = msg.get("role", "")
 
             if role == "user" and "Code executed:" in content:
-                # Extract code block
-                code_match = re.search(r"```python\n(.*?)```", content, re.DOTALL)
+                # Extract code block — match both ```python and ```repl blocks.
+                # The incremental pipeline uses ```repl``` (per INCREMENTAL_SYSTEM_PROMPT),
+                # so a python-only regex misses all incremental turn summaries.
+                code_match = re.search(r"```(?:python|repl)\n(.*?)```", content, re.DOTALL)
                 if code_match:
                     code = code_match.group(1).strip()
                     # Use AST parsing for reliable variable name extraction
