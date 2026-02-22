@@ -1,0 +1,40 @@
+{
+  "experiment": "Attribute-Overwriting Ablation V3 Run 2",
+  "iteration": 12,
+  "date": "2026-02-22",
+  "task_idx": 1,
+  "model": "gpt-4o-mini",
+  "version": 3,
+  "fix": "monotone_qualifying_propagation",
+  "gold_pairs_count": 8001,
+  "coverage_ceiling_25k": 0.2066,
+  "condition_a": {
+    "condition": "A_incremental_label_aware_v3_attribute_fix",
+    "compliance_rate": 1.0,
+    "phantom_chunks_detected": 0,
+    "final_f1": 0.3228,
+    "final_precision": 1.0,
+    "final_recall": 0.1925,
+    "total_input_tokens": 60005,
+    "total_output_tokens": 8205,
+    "f1_progression": [
+      {"chunk": 1, "f1": 0.0193, "precision": 1.0, "recall": 0.0097, "pairs": 78, "pair_checks_total": 595, "total_retractions": 0, "compliant": true},
+      {"chunk": 2, "f1": 0.1167, "precision": 1.0, "recall": 0.0620, "pairs": 496, "pair_checks_total": 2223, "total_retractions": 23, "compliant": true},
+      {"chunk": 3, "f1": 0.2115, "precision": 1.0, "recall": 0.1182, "pairs": 946, "pair_checks_total": 4484, "total_retractions": 84, "compliant": true},
+      {"chunk": 4, "f1": 0.2749, "precision": 1.0, "recall": 0.1594, "pairs": 1275, "pair_checks_total": 7555, "total_retractions": 469, "compliant": true},
+      {"chunk": 5, "f1": 0.3228, "precision": 1.0, "recall": 0.1925, "pairs": 1540, "pair_checks_total": 10643, "total_retractions": 1078, "compliant": true}
+    ]
+  },
+  "condition_c": {
+    "condition": "C_oracle_label_aware_v2",
+    "f1": 0.3424,
+    "precision": 1.0,
+    "recall": 0.2066,
+    "input_tokens": 24767,
+    "qualifying_entities": 58,
+    "predicted_pairs": 1653
+  },
+  "a_vs_c_ratio": 0.9428,
+  "token_ratio_a_over_c": 2.42,
+  "notes": "Run 2 of V3 experiment. 100% compliance achieved. Attribute-overwriting fix substantially closes A/C gap (64.3% V2 → 94.3% V3). Bug was primary driver of the gap."
+}
