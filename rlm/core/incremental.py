@@ -263,6 +263,11 @@ class IncrementalState:
                 for other_id in all_ids:
                     if other_id == updated_id:
                         continue
+                    # Skip new entities — updated × new already covered
+                    # in the new × existing loop (new_id × existing_id where
+                    # updated entities are in existing_ids)
+                    if other_id in new_ids:
+                        continue
                     # Skip if this pair was already checked via retraction
                     canonical = (min(updated_id, other_id), max(updated_id, other_id))
                     if canonical in retracted_pairs:
