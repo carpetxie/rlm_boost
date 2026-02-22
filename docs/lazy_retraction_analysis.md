@@ -57,7 +57,8 @@ this is equivalent to a full verification pass.
 
 ## 4. Empirical Support (from Temporal Sweep, k=5)
 
-From `results/streaming/sigma_model_results.json` — per-entity retraction distributions:
+From `results/streaming/retraction_tasks_11_13.json` (Iteration 8, authoritative run with
+deduplication guard active) — per-entity retraction distributions across all four tasks:
 
 ### Task 5 ("before DATE") — Safe for lazy retraction
 
@@ -66,18 +67,17 @@ From `results/streaming/sigma_model_results.json` — per-entity retraction dist
 | Total entities | 231 |
 | Final pairs | 21 |
 | Total retractions | 44 |
-| Never retracted | 206 (89.2%) |
-| Retracted 1× (unidirectional) | 22 (9.5%) |
-| Retracted 2+× (bidirectional) | 3 (1.3%) |
+| Never retracted | 223 (96.5%) |
+| Retracted 1× (unidirectional) | 2 (0.9%) |
+| Retracted 2+× (bidirectional) | 6 (2.6%) |
 | Max retractions per entity | 3 |
 
-**Interpretation**: 98.7% of retracted entities retract at most once. The 3 bidirectional
-entities (1.3%) represent the edge case where date parsing is ambiguous. For a lazy
-strategy, at query time we'd need to verify at most 25 entities (22+3) out of 231 — a
-10.8% overhead vs. eager retraction's constant-time operation. The **false positive
-count is bounded**: at most 6 stale pairs (3 bidirectional × ~2 pairs each) would
-persist between queries. For a system with infrequent queries (batch mode), this is
-acceptable.
+**Interpretation**: 2.6% bidirectional rate (8 entities with 2+ retractions), low relative
+to Task 7 (10.4%). The cumulative instance count grows monotonically, but the date
+boundary condition interacts with label semantics in ways that allow a small fraction of
+entities to oscillate. For a lazy strategy in batch mode, at most 8 entities require
+re-verification at query time. Task 5 remains the **safest** tested condition, though the
+"~0% bidirectional" phrasing in prior versions overstated safety.
 
 ### Task 7 ("after DATE") — Unsafe for lazy retraction
 
@@ -86,28 +86,73 @@ acceptable.
 | Total entities | 231 |
 | Final pairs | 1485 |
 | Total retractions | 2151 |
-| Never retracted | 182 (78.8%) |
-| Retracted 1× | 25 (10.8%) |
+| Never retracted | 194 (84.0%) |
+| Retracted 1× | 13 (5.6%) |
 | Retracted 2+× (bidirectional) | 24 (10.4%) |
-| Max retractions per entity | 9 |
+| Max retractions per entity | 4 |
 
-**Interpretation**: 10.4% of entities are bidirectionally retracted (vs. 1.3% for
-Task 5 — a **4× ratio**). With 24 bidirectional entities each potentially involved in
-many pairs, lazy retraction could produce permanently stale results for a substantial
-fraction of the 1485 final pairs. A lazy strategy applied to Task 7 would require
-re-verifying 49 entities (25+24) at query time — but since entity validity can
-oscillate, the re-verification must be exhaustive (full pair-check of all entities
-involving the 24 bidirectional ones). This approaches the cost of eager retraction.
+**Interpretation**: 10.4% of entities are bidirectionally retracted. With 24 bidirectional
+entities each potentially involved in many pairs, lazy retraction could produce permanently
+stale results for a substantial fraction of the 1485 final pairs. Unsafe.
+
+### Task 11 ("Exactly N" cardinality) — **Empirically Unsafe** (contradicts prior claim)
+
+| Metric | Value |
+|--------|-------|
+| Total entities | 231 |
+| Final pairs | 689 |
+| Total retractions | 883 |
+| Never retracted | 202 (87.4%) |
+| Retracted 1× (unidirectional) | 15 (6.5%) |
+| Retracted 2+× (bidirectional) | 14 (6.1%) |
+| Max retractions per entity | 3 |
+
+**Interpretation**: 6.1% bidirectional rate — substantially higher than Task 5 (2.6%) and
+comparable to Task 7 (10.4%). The prior claim of "~0% bidirectional" was **empirically
+refuted**. The theoretical argument (monotone instance counts → monotone condition) breaks
+down in practice because: (a) the condition involves accumulated label distributions, not
+just raw counts, and (b) as instances accumulate, an entity's dominant label can change,
+causing oscillation. Task 11 is **NOT safe** for lazy retraction.
+
+### Task 13 ("Exactly N" cardinality) — **Empirically Unsafe** (contradicts prior claim)
+
+| Metric | Value |
+|--------|-------|
+| Total entities | 231 |
+| Final pairs | 1524 |
+| Total retractions | 1679 |
+| Never retracted | 184 (79.7%) |
+| Retracted 1× (unidirectional) | 25 (10.8%) |
+| Retracted 2+× (bidirectional) | 22 (9.5%) |
+| Max retractions per entity | 3 |
+
+**Interpretation**: 9.5% bidirectional rate — nearly identical to Task 7 (10.4%) and far
+above Task 5 (2.6%). The "~0% bidirectional" claim was **empirically refuted**. Task 13 is
+**NOT safe** for lazy retraction.
 
 ## 5. Applicability Region for Lazy Retraction
 
-| Condition Type | Monotone? | Lazy Safe? | Bidirectional Rate | Recommendation |
-|----------------|-----------|------------|-------------------|----------------|
-| "Before DATE" | Yes | **Yes** | 1.3% | Use lazy for low query rates |
+**Corrected table** (Iteration 8, empirically verified for all conditions):
+
+| Condition Type | Monotone (theory)? | Lazy Safe (empirical)? | Bidirectional Rate | Recommendation |
+|----------------|-------------------|----------------------|-------------------|----------------|
+| "Before DATE" | Yes | **Yes** (with caution) | 2.6% | Use lazy for batch mode; 2.6% overhead is low |
 | "After DATE" | No | **No** | 10.4% | Use eager always |
-| "Exactly N" | Yes | **Yes** | ~0% (monotone count) | Use lazy for batch |
+| "Exactly N" (Task 11) | Claimed Yes | **No** (refuted) | 6.1% | Use eager; monotone assumption violated in practice |
+| "Exactly N" (Task 13) | Claimed Yes | **No** (refuted) | 9.5% | Use eager; comparable to "after DATE" rate |
 | Symmetric co-appear. | Partial | Conditional | Varies | Depends on window size |
 | Asymmetric cardinality | No | **No** | Varies | Use eager always |
+
+**Key correction from Iteration 8**: The theoretical claim that "Exactly N" conditions have
+~0% bidirectional retraction rate was refuted by empirical analysis. Tasks 11 and 13 show
+6.1% and 9.5% rates — comparable to the "unsafe" Task 7 (10.4%). The theoretical
+monotonicity argument (instance counts only grow) does not hold because the OOLONG-Pairs
+"exactly N" condition involves accumulated label distributions where the dominant label can
+shift as more instances arrive, causing oscillation.
+
+**Implication for paper**: The monotonicity safety condition remains a valid diagnostic
+principle, but practitioners must **empirically verify** bidirectional rates rather than
+rely solely on theoretical condition type. Add this as a paper recommendation.
 
 ## 6. Recommendation
 
