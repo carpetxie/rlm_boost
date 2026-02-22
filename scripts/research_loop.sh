@@ -4,7 +4,12 @@
 # Usage:
 #   ./scripts/research_loop.sh [max_iterations] [model]
 #
-# The loop runs ALL iterations — no early exit.
+# Automatically resumes from the last completed iteration.
+# If iteration N has both critique_N.md and researcher_response_N.md in the archive,
+# it's considered complete. The loop starts from N+1.
+#
+# If iteration N has a critique but no researcher response, the loop resumes
+# at iteration N (researcher phase).
 
 set -euo pipefail
 
@@ -16,6 +21,33 @@ ARCHIVE="$EXCHANGES/archive"
 LOGFILE="$ARCHIVE/research_loop.log"
 
 mkdir -p "$ARCHIVE"
+
+# ── Auto-detect resume point ──────────────────────────────────────────
+detect_resume_point() {
+    local last_complete=0
+    local has_partial_critique=false
+
+    for f in "$ARCHIVE"/researcher_response_*.md; do
+        [ -f "$f" ] || continue
+        local n
+        n=$(basename "$f" | sed 's/researcher_response_\([0-9]*\)\.md/\1/')
+        if [ -f "$ARCHIVE/critique_${n}.md" ] && [ "$n" -gt "$last_complete" ]; then
+            last_complete=$n
+        fi
+    done
+
+    # Check if there's a critique for last_complete+1 without a researcher response
+    local next=$(( last_complete + 1 ))
+    if [ -f "$ARCHIVE/critique_${next}.md" ] && [ ! -f "$ARCHIVE/researcher_response_${next}.md" ]; then
+        echo "${next}:researcher"
+    else
+        echo "$(( last_complete + 1 )):full"
+    fi
+}
+
+RESUME_INFO=$(detect_resume_point)
+START_ITERATION="${RESUME_INFO%%:*}"
+RESUME_MODE="${RESUME_INFO##*:}"
 
 # Colors
 RED='\033[0;31m'
@@ -97,7 +129,12 @@ log "${BLUE}${BOLD}  RLM RESEARCH LOOP STARTED${NC}"
 log "${BLUE}${BOLD}  Max iterations: $MAX_ITERATIONS | Model: $MODEL${NC}"
 log "${BLUE}${BOLD}  Repo root: $REPO_ROOT${NC}"
 log "${BLUE}${BOLD}  Log file: $LOGFILE${NC}"
-log "${BLUE}${BOLD}  Mode: NO early exit — all $MAX_ITERATIONS iterations will run${NC}"
+if [ "$START_ITERATION" -gt 1 ] || [ "$RESUME_MODE" = "researcher" ]; then
+    log "${GREEN}${BOLD}  Resuming from iteration $START_ITERATION ($RESUME_MODE phase)${NC}"
+    log "${GREEN}${BOLD}  Iterations $((START_ITERATION - 1)) already complete in archive${NC}"
+else
+    log "${BLUE}${BOLD}  Starting fresh — no prior iterations found${NC}"
+fi
 log "${BLUE}${BOLD}======================================================${NC}"
 echo ""
 
@@ -109,8 +146,12 @@ log_separator
 echo ""
 
 FINAL_ITERATION=0
+SKIP_CRITIQUER=false
+if [ "$RESUME_MODE" = "researcher" ]; then
+    SKIP_CRITIQUER=true
+fi
 
-for i in $(seq 1 "$MAX_ITERATIONS"); do
+for i in $(seq "$START_ITERATION" "$MAX_ITERATIONS"); do
     FINAL_ITERATION=$i
     ITER_START=$(date +%s)
 
@@ -121,6 +162,11 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     echo ""
 
     # ── Phase 1: Critiquer ──────────────────────────────────────────────
+    if [ "$SKIP_CRITIQUER" = true ]; then
+        log "${YELLOW}[Phase 1: CRITIQUER] Skipped — resuming from researcher phase${NC}"
+        log "  Using existing critique: $ARCHIVE/critique_${i}.md"
+        SKIP_CRITIQUER=false
+    else
     log "${RED}${BOLD}[Phase 1: CRITIQUER]${NC}"
     PHASE_START=$(date +%s)
 
@@ -194,6 +240,7 @@ IMPORTANT: Do NOT set STATUS: ACCEPT. Always find concrete improvements — arch
         log_separator
         continue
     fi
+    fi  # end of critiquer skip/run block
 
     # ── Phase 2: Researcher ─────────────────────────────────────────────
     echo ""
