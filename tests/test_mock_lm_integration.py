@@ -73,31 +73,30 @@ class ScriptedMockLM(BaseLM):
 
 
 # =========================================================================
-# Scripted responses for the incremental protocol
+# Scripted responses for the incremental protocol (using _incremental API)
 # =========================================================================
 
-# Turn 1: First chunk — process all entities, store in entity_cache
-TURN1_RESPONSE_ITER1 = """Let me process the first chunk of data.
+# Turn 1: First chunk — parse entities, define check_pair, call process_chunk(0)
+TURN1_RESPONSE_ITER1 = """Let me process the first chunk of data using the _incremental primitives.
 
 ```repl
-# Parse entities from the first context chunk
-entity_cache = {}
+# Parse entities from the first context chunk into {entity_id: attributes_dict}
+entities = {}
 for line in context_0.strip().split("\\n"):
     parts = line.split("|")
     if len(parts) >= 2:
         eid = parts[0].strip()
         attrs = parts[1].strip()
-        entity_cache[eid] = attrs
+        entities[eid] = {"type": attrs}
 
-pair_results = set()
-entities = list(entity_cache.keys())
-for i in range(len(entities)):
-    for j in range(i+1, len(entities)):
-        pair_results.add((entities[i], entities[j]))
+# Define pair condition (persists across chunks via REPL state)
+def check_pair(attrs1, attrs2):
+    return attrs1["type"] == attrs2["type"]
 
-processed_ids = set(entity_cache.keys())
-result_count = len(pair_results)
-print(f"Processed {len(entity_cache)} entities, found {len(pair_results)} pairs")
+# process_chunk() handles entity storage, pair checking, and retraction
+stats = _incremental.process_chunk(0, entities, pair_checker=check_pair)
+pair_results = _incremental.pair_tracker.get_pairs()
+print(f"Processed {stats['new_entities']} entities, found {stats['total_pairs']} pairs")
 ```
 """
 
@@ -106,37 +105,24 @@ TURN1_RESPONSE_ITER2 = """Based on my analysis of the first chunk:
 FINAL(Found pairs from chunk 1)
 """
 
-# Turn 2: Second chunk — incremental processing
-TURN2_RESPONSE_ITER1 = """I see the incremental state from prior turns. Let me process only the new data.
+# Turn 2: Second chunk — parse only new chunk, call process_chunk(1)
+TURN2_RESPONSE_ITER1 = """I see the incremental state from prior turns. Let me process only the new data using _incremental.
 
 ```repl
-# Process only the NEW chunk (context_1)
+# Parse ONLY the new chunk (context_1) — do NOT re-read context_0
 new_entities = {}
 for line in context_1.strip().split("\\n"):
     parts = line.split("|")
     if len(parts) >= 2:
         eid = parts[0].strip()
         attrs = parts[1].strip()
-        new_entities[eid] = attrs
+        new_entities[eid] = {"type": attrs}
 
-# Update entity_cache with new entities
-for eid, attrs in new_entities.items():
-    entity_cache[eid] = attrs
-
-# Check only NEW pairs (new × existing)
-new_ids = set(new_entities.keys())
-for new_id in new_ids:
-    for existing_id in processed_ids:
-        pair_results.add((min(new_id, existing_id), max(new_id, existing_id)))
-
-# Also check new × new
-new_list = sorted(new_ids)
-for i in range(len(new_list)):
-    for j in range(i+1, len(new_list)):
-        pair_results.add((new_list[i], new_list[j]))
-
-processed_ids.update(new_ids)
-print(f"After chunk 2: {len(entity_cache)} total entities, {len(pair_results)} pairs")
+# process_chunk() handles new vs updated entities, retractions, re-evaluation automatically
+stats = _incremental.process_chunk(1, new_entities, pair_checker=check_pair)
+pair_results = _incremental.pair_tracker.get_pairs()
+print(f"After chunk 2: {stats['total_entities']} total entities, {stats['total_pairs']} pairs, "
+      f"{stats['retracted_pairs']} retracted")
 ```
 """
 
@@ -145,30 +131,30 @@ TURN2_RESPONSE_ITER2 = """After incrementally processing chunk 2:
 FINAL(Found pairs from chunks 1+2)
 """
 
-# Turn 3: Third chunk — incremental, tests _incremental primitives
-TURN3_RESPONSE_ITER1 = """Processing chunk 3 incrementally using the built-in primitives.
+# Turn 3: Third chunk — verify _incremental types, process chunk 2, report stats
+TURN3_RESPONSE_ITER1 = """Processing chunk 3 incrementally using _incremental.process_chunk().
 
 ```repl
-# Use the _incremental primitives for this chunk
-# First, check that _incremental exists and works
-print(f"IncrementalState available: {type(_incremental)}")
-print(f"EntityCache available: {EntityCache is not None}")
-print(f"PairTracker available: {PairTracker is not None}")
+# Verify _incremental primitives are available and have accumulated state
+print(f"IncrementalState: {_incremental}")
+print(f"EntityCache type: {type(_incremental.entity_cache).__name__}")
+print(f"PairTracker type: {type(_incremental.pair_tracker).__name__}")
 
-# Process new chunk
+# Parse ONLY the new chunk (context_2)
 new_chunk_entities = {}
 for line in context_2.strip().split("\\n"):
     parts = line.split("|")
     if len(parts) >= 2:
         eid = parts[0].strip()
         attrs = parts[1].strip()
-        new_chunk_entities[eid] = attrs
+        new_chunk_entities[eid] = {"type": attrs}
 
-entity_cache.update(new_chunk_entities)
-processed_ids.update(new_chunk_entities.keys())
-chunk3_count = len(new_chunk_entities)
-total_count = len(entity_cache)
-print(f"Chunk 3: {chunk3_count} new entities, {total_count} total")
+# Process chunk 2 (index 2, the third chunk)
+stats = _incremental.process_chunk(2, new_chunk_entities, pair_checker=check_pair)
+pair_results = _incremental.pair_tracker.get_pairs()
+summary = _incremental.get_stats()
+print(f"Chunk 3: {stats['new_entities']} new entities, total={summary['total_entities']}, "
+      f"{summary['total_pairs']} pairs, {summary['total_retractions']} total retractions")
 ```
 """
 
@@ -275,8 +261,9 @@ class TestIncrementalPipelineIntegration:
             turn2_user = _get_user_prompt_from_recorded(mock_lm.recorded_prompts[2])
             assert turn2_user is not None
             assert "INCREMENTAL STATE" in turn2_user
-            # Should mention entity_cache since it was created in turn 1
-            assert "entity_cache" in turn2_user
+            # Should mention variables created in turn 1 by the new _incremental protocol.
+            # Turn 1 creates: entities (dict), check_pair (function), stats (dict), pair_results (set)
+            assert any(var in turn2_user for var in ["entities", "check_pair", "stats", "pair_results"])
 
             rlm.close()
 
@@ -302,20 +289,24 @@ class TestIncrementalPipelineIntegration:
             # Provide structured context
             rlm.completion("e1|type_a\ne2|type_b", root_prompt="Find pairs")
 
-            # Turn 2 code accesses entity_cache from turn 1
+            # Turn 2 code accesses check_pair and _incremental from turn 1.
+            # With the new _incremental protocol:
+            #   Turn 1 creates: entities, check_pair, stats, pair_results
+            #   Turn 2 uses: check_pair (persisted), _incremental (persisted)
             result2 = rlm.completion("e3|type_c\ne4|type_d", root_prompt="Find pairs")
 
-            # If variables didn't persist, the code in turn 2 would fail
-            # because entity_cache, pair_results, processed_ids wouldn't exist.
-            # The fact that we get a result (not an error) confirms persistence.
+            # If variables didn't persist, the code in turn 2 would fail because
+            # check_pair wouldn't exist. The fact that we get a result confirms persistence.
             assert result2.response is not None
             assert "Found pairs from chunks 1+2" in result2.response
 
-            # Verify the environment has the variables
+            # Verify the environment has the new-protocol variables from turn 1
             env = rlm._persistent_env
-            assert "entity_cache" in env.locals
-            assert "pair_results" in env.locals
-            assert "processed_ids" in env.locals
+            assert "entities" in env.locals      # from turn 1 parse
+            assert "check_pair" in env.locals    # function defined in turn 1
+            assert "pair_results" in env.locals  # result of get_pairs() in turn 1 and 2
+            # _incremental has accumulated state across both turns
+            assert len(env.locals["_incremental"].entity_cache) > 0
 
             rlm.close()
 
