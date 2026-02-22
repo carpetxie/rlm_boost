@@ -346,8 +346,14 @@ class IncrementalState:
 
             # For updated entities, also check against ALL other entities
             # (not just retracted pairs) — the new classification may create
-            # NEW valid pairs that didn't exist before
+            # NEW valid pairs that didn't exist before.
+            # Bug fix (Iteration 12): track already-checked canonical pairs across
+            # updated-entity sweeps to avoid double-counting when two updated entities
+            # interact. Previously, (A,B) was checked once in A's sweep and once in
+            # B's sweep, inflating the pair_checks counter (though correctness was
+            # preserved by add_pair's idempotency).
             all_ids = self.entity_cache.get_ids()
+            checked_in_updated_sweep: set[tuple[str, str]] = set()
             for updated_id in updated_ids:
                 updated_attrs = self.entity_cache.get(updated_id)
                 for other_id in all_ids:
@@ -358,10 +364,15 @@ class IncrementalState:
                     # updated entities are in existing_ids)
                     if other_id in new_ids:
                         continue
-                    # Skip if this pair was already checked via retraction
                     canonical = (min(updated_id, other_id), max(updated_id, other_id))
+                    # Skip if this pair was already checked via retraction
                     if canonical in retracted_pairs:
                         continue
+                    # Skip if this pair was already checked in a prior iteration of
+                    # the updated-entity sweep (deduplication across updated entities)
+                    if canonical in checked_in_updated_sweep:
+                        continue
+                    checked_in_updated_sweep.add(canonical)
                     other_attrs = self.entity_cache.get(other_id)
                     pair_checks += 1
                     if pair_checker(updated_attrs, other_attrs):
@@ -397,6 +408,26 @@ class IncrementalState:
             "total_retractions": self._total_retractions,
             "chunks_processed": len(self.chunk_log),
         }
+
+    def reset(self) -> None:
+        """Reset all state to allow reprocessing from scratch.
+
+        Clears entity cache, pair tracker, chunk log, and all counters.
+        Required if you need to re-process a chunk that was already processed
+        (the idempotency guard in process_chunk() returns cached stats without
+        reprocessing; reset() clears the cache so fresh processing occurs).
+
+        Use with caution: resetting discards all accumulated incremental state.
+        For selective re-processing, consider creating a new IncrementalState
+        instead of resetting.
+        """
+        self.entity_cache = EntityCache()
+        self.pair_tracker = PairTracker()
+        self.chunk_log = []
+        self._total_new_entities = 0
+        self._total_pair_checks = 0
+        self._total_retractions = 0
+        self._processed_chunk_indices = {}
 
     def __repr__(self) -> str:
         return (
