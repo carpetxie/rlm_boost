@@ -130,53 +130,78 @@ The REPL environment provides:
 2. `llm_query(prompt)` and `llm_query_batched(prompts)` — query sub-LLMs for classification/analysis.
 3. `SHOW_VARS()` — see all variables you've created (these persist between chunks!).
 4. `FINAL(answer)` or `FINAL_VAR(var)` — provide your answer.
+5. `_incremental` — a pre-initialized `IncrementalState` object that manages ALL incremental state:
+   - `_incremental.entity_cache` — `EntityCache` storing entity classifications with versioning
+   - `_incremental.pair_tracker` — `PairTracker` with O(degree) retraction support
+   - `_incremental.process_chunk(chunk_index, entities_dict, pair_checker)` — **the primary interface**
+   - `_incremental.get_stats()` — cumulative statistics (pair_checks, retractions, chunks_processed)
 
 ## INCREMENTAL COMPUTATION PROTOCOL
 
-You MUST follow this protocol for efficient processing:
+**Do NOT create your own `entity_cache = {}` dict.** Use `_incremental.process_chunk()` for all state
+management. Your only responsibilities are:
+1. Implement `parse_entities(context_chunk) -> dict` mapping `entity_id -> attributes_dict`
+2. Implement `check_pair(attrs1, attrs2) -> bool` for your pair condition
 
 ### On the FIRST chunk (context_0):
-1. Parse and classify all entities in the data
-2. Store results in reusable data structures:
-   - `entity_cache = {}` — maps entity IDs to their classifications/attributes
-   - `pair_results = set()` — stores discovered valid pairs
-   - `processed_ids = set()` — tracks which entities have been processed
-3. Compute initial answer from these structures
+```repl
+# Step 1: Parse entities from the first chunk into {entity_id: attributes_dict}
+entities = {}
+for line in context_0.strip().split("\\n"):
+    parts = line.split("|")
+    if len(parts) >= 2:
+        entities[parts[0].strip()] = {"type": parts[1].strip()}
+    # Add any other attributes you need from the line
 
-### On SUBSEQUENT chunks (context_1, context_2, ...):
-1. **DO NOT re-read old context.** Your `entity_cache` already has prior results.
-2. Parse ONLY the new chunk to find new entities
-3. Classify ONLY the new entities
-4. Check pairs ONLY between (new entities × cached entities) and (new × new)
-5. MERGE new results into existing structures:
-   ```repl
-   # Process only new data
-   new_entities = parse_new_chunk(context_N)
-   new_classifications = classify_entities(new_entities)  # via llm_query
-   entity_cache.update(new_classifications)
+# Step 2: Define your pair condition (persists across chunks automatically)
+def check_pair(attrs1, attrs2):
+    # return True if attrs1 and attrs2 form a valid pair for your task
+    return attrs1["type"] == attrs2["type"]  # example — customize for your task
 
-   # Check only new pairs (incremental, not quadratic)
-   for new_id in new_classifications:
-       for cached_id in processed_ids:
-           if check_pair(entity_cache[new_id], entity_cache[cached_id]):
-               pair_results.add((new_id, cached_id))
-   processed_ids.update(new_classifications.keys())
-   ```
-6. Handle RETRACTIONS: if new data changes the classification of an entity,
-   update `entity_cache` and re-check ONLY pairs involving that entity.
+# Step 3: process_chunk() handles everything:
+#   - Stores entities in EntityCache with versioning
+#   - Checks all pairs using check_pair()
+#   - Records valid pairs in PairTracker
+stats = _incremental.process_chunk(0, entities, pair_checker=check_pair)
 
-### Retraction Protocol:
-Some conditions (e.g., "exactly one X") can be invalidated by new data.
-When new data might change a classification:
-1. Check if any existing entity's classification changes
-2. If so, update `entity_cache[entity_id]`
-3. Re-check all pairs involving that entity
-4. Remove invalidated pairs from `pair_results`
+# Step 4: Get current results
+pair_results = _incremental.pair_tracker.get_pairs()
+print(f"Chunk 0: {stats['new_entities']} entities, {stats['total_pairs']} pairs")
+```
 
-This protocol achieves O(k·n) cost per chunk (k new entities × n existing)
-instead of O((n+k)²) for full recomputation.
+### On SUBSEQUENT chunks (context_N, where N >= 1):
+```repl
+# Step 1: Parse ONLY the new chunk — do NOT re-read context_0, context_1, etc.
+new_entities = {}
+for line in context_N.strip().split("\\n"):  # replace N with the actual chunk index
+    parts = line.split("|")
+    if len(parts) >= 2:
+        new_entities[parts[0].strip()] = {"type": parts[1].strip()}
 
-Think step by step, execute code immediately, and maintain your incremental state.
+# Step 2: process_chunk() handles EVERYTHING automatically:
+#   - Detects new vs updated entities (seen before but with new/changed data)
+#   - Retracts stale pairs for updated entities via O(degree) inverted index
+#   - Checks (new × existing) + (new × new) pairs
+#   - Re-evaluates retracted pairs with updated classifications
+#   - Merges results into EntityCache and PairTracker
+stats = _incremental.process_chunk(N, new_entities, pair_checker=check_pair)
+
+# Step 3: Get updated results (always current, no manual merging needed)
+pair_results = _incremental.pair_tracker.get_pairs()
+print(f"Chunk N: {stats['new_entities']} new, {stats['updated_entities']} updated, "
+      f"{stats['retracted_pairs']} retracted, {stats['total_pairs']} total pairs")
+```
+
+### What process_chunk() handles for you:
+- **Non-monotonic updates (retractions)**: If an entity appears in chunk 0 and again in chunk 2,
+  all its stale pairs are automatically retracted and re-evaluated. Handles "exactly one X"
+  conditions that can be invalidated by new data — no manual retraction logic needed.
+- **O(k·n) cost per chunk**: Only k new entities × n existing are checked, not O((n+k)²).
+- **Correctness guarantee**: After each chunk, `_incremental.pair_tracker.get_pairs()` contains
+  exactly the currently valid pairs.
+
+Think step by step, execute code immediately, and use `_incremental.process_chunk()` as your
+primary state management interface. Do NOT bypass it by maintaining your own entity_cache dict.
 """
 )
 
