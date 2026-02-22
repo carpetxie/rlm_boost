@@ -1,0 +1,565 @@
+{
+  "num_chunks": 5,
+  "tasks": {
+    "1": {
+      "task_id": 1,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 1326,
+          "new_pairs_this_chunk": 1326
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 3403,
+          "new_pairs_this_chunk": 2077
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 4656,
+          "new_pairs_this_chunk": 1253
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 5995,
+          "new_pairs_this_chunk": 1339
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 8001,
+          "new_pairs_this_chunk": 2006
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    },
+    "2": {
+      "task_id": 2,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 496,
+          "new_pairs_this_chunk": 496
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 1540,
+          "new_pairs_this_chunk": 1044
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 2850,
+          "new_pairs_this_chunk": 1310
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 4186,
+          "new_pairs_this_chunk": 1336
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 5356,
+          "new_pairs_this_chunk": 1170
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    },
+    "3": {
+      "task_id": 3,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 1225,
+          "new_pairs_this_chunk": 1225
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 3081,
+          "new_pairs_this_chunk": 1856
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 5253,
+          "new_pairs_this_chunk": 2172
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 7750,
+          "new_pairs_this_chunk": 2497
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 10440,
+          "new_pairs_this_chunk": 2690
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    },
+    "6": {
+      "task_id": 6,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 1128,
+          "new_pairs_this_chunk": 1128
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 3081,
+          "new_pairs_this_chunk": 1953
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 5253,
+          "new_pairs_this_chunk": 2172
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 7260,
+          "new_pairs_this_chunk": 2007
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 8911,
+          "new_pairs_this_chunk": 1651
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    },
+    "8": {
+      "task_id": 8,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 1275,
+          "new_pairs_this_chunk": 1275
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 2701,
+          "new_pairs_this_chunk": 1426
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 4465,
+          "new_pairs_this_chunk": 1764
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 5995,
+          "new_pairs_this_chunk": 1530
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 8128,
+          "new_pairs_this_chunk": 2133
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    },
+    "11": {
+      "task_id": 11,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 0,
+          "new_pairs_this_chunk": 0
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 104,
+          "new_pairs_this_chunk": 104
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 359,
+          "new_pairs_this_chunk": 271
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 553,
+          "new_pairs_this_chunk": 220
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 689,
+          "new_pairs_this_chunk": 180
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    },
+    "13": {
+      "task_id": 13,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 0,
+          "new_pairs_this_chunk": 0
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 251,
+          "new_pairs_this_chunk": 251
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 656,
+          "new_pairs_this_chunk": 461
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 1076,
+          "new_pairs_this_chunk": 466
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 1524,
+          "new_pairs_this_chunk": 494
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    },
+    "19": {
+      "task_id": 19,
+      "chunks": [
+        {
+          "chunk_index": 0,
+          "new_users": 98,
+          "total_users": 98,
+          "full_user_parses": 98,
+          "full_pair_checks": 4753,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 4753,
+          "pair_check_savings_pct": 0.0,
+          "total_pairs_discovered": 0,
+          "new_pairs_this_chunk": 0
+        },
+        {
+          "chunk_index": 1,
+          "new_users": 45,
+          "total_users": 143,
+          "full_user_parses": 143,
+          "full_pair_checks": 10153,
+          "incremental_user_parses": 96,
+          "incremental_pair_checks": 5400,
+          "pair_check_savings_pct": 46.81374963065104,
+          "total_pairs_discovered": 9,
+          "new_pairs_this_chunk": 9
+        },
+        {
+          "chunk_index": 2,
+          "new_users": 25,
+          "total_users": 168,
+          "full_user_parses": 168,
+          "full_pair_checks": 14028,
+          "incremental_user_parses": 87,
+          "incremental_pair_checks": 3875,
+          "pair_check_savings_pct": 72.3766752209866,
+          "total_pairs_discovered": 59,
+          "new_pairs_this_chunk": 55
+        },
+        {
+          "chunk_index": 3,
+          "new_users": 27,
+          "total_users": 195,
+          "full_user_parses": 195,
+          "full_pair_checks": 18915,
+          "incremental_user_parses": 85,
+          "incremental_pair_checks": 4887,
+          "pair_check_savings_pct": 74.1633624107851,
+          "total_pairs_discovered": 24,
+          "new_pairs_this_chunk": 0
+        },
+        {
+          "chunk_index": 4,
+          "new_users": 36,
+          "total_users": 231,
+          "full_user_parses": 231,
+          "full_pair_checks": 26565,
+          "incremental_user_parses": 98,
+          "incremental_pair_checks": 7650,
+          "pair_check_savings_pct": 71.20271033314512,
+          "total_pairs_discovered": 60,
+          "new_pairs_this_chunk": 42
+        }
+      ],
+      "total_full_pair_checks": 74414,
+      "total_incremental_pair_checks": 26565,
+      "total_full_user_parses": 835,
+      "total_incremental_user_parses": 464
+    }
+  },
+  "summary": {
+    "total_full_pair_checks": 595312,
+    "total_incremental_pair_checks": 212520,
+    "pair_check_savings_pct": 64.30107237885345,
+    "estimated_full_tokens": 6621120,
+    "estimated_incremental_tokens": 2496400,
+    "estimated_token_savings_pct": 62.296409066744
+  }
+}
