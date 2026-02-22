@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from rlm.clients import BaseLM, get_client
+from rlm.core.history_manager import HistoryManager
 from rlm.core.lm_handler import LMHandler
 from rlm.core.types import (
     ClientBackend,
@@ -97,6 +98,14 @@ class RLM:
         # Persistence support
         self.persistent = persistent
         self._persistent_env: SupportsPersistence | None = None
+        self._turn_count: int = 0
+
+        # History manager for bounded message growth in persistent mode
+        self.history_manager = HistoryManager(
+            strategy="summarize" if persistent else "sliding_window",
+            max_recent_iterations=5,
+            max_messages=40,
+        )
 
         # Validate persistence support at initialization
         if self.persistent:
@@ -234,7 +243,12 @@ class RLM:
                     # about existing REPL state so it can build incrementally
                     cached_vars = self._get_cached_vars(environment)
 
-                current_prompt = message_history + [
+                # Prune history if it's growing too large
+                pruned_history = self.history_manager.prune(
+                    message_history, turn_number=self._turn_count
+                )
+
+                current_prompt = pruned_history + [
                     build_user_prompt(root_prompt, i, context_count, history_count, cached_vars)
                 ]
 
@@ -261,9 +275,14 @@ class RLM:
                     self.verbose.print_final_answer(final_answer)
                     self.verbose.print_summary(i + 1, time_end - time_start, usage.to_dict())
 
-                    # Store message history in persistent environment
+                    # Store message history and turn summary in persistent environment
                     if self.persistent and isinstance(environment, SupportsPersistence):
                         environment.add_history(message_history)
+                        summary = self.history_manager.generate_turn_summary(
+                            message_history, final_answer
+                        )
+                        self.history_manager.add_turn_summary(summary)
+                        self._turn_count += 1
 
                     return RLMChatCompletion(
                         root_model=self.backend_kwargs.get("model_name", "unknown")
@@ -288,9 +307,12 @@ class RLM:
             self.verbose.print_final_answer(final_answer)
             self.verbose.print_summary(self.max_iterations, time_end - time_start, usage.to_dict())
 
-            # Store message history in persistent environment
+            # Store message history and turn summary in persistent environment
             if self.persistent and isinstance(environment, SupportsPersistence):
                 environment.add_history(message_history)
+                summary = self.history_manager.generate_turn_summary(message_history, final_answer)
+                self.history_manager.add_turn_summary(summary)
+                self._turn_count += 1
 
             return RLMChatCompletion(
                 root_model=self.backend_kwargs.get("model_name", "unknown")
