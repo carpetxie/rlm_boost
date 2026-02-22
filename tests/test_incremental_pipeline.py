@@ -423,6 +423,76 @@ print(f"Pairs: {sorted(_incremental.pair_tracker.get_pairs())}")
             repl.cleanup()
 
 
+class TestProcessChunkDeduplication:
+    """Test the idempotency guard added in Iteration 8 (Failure Mode C fix)."""
+
+    def test_double_call_returns_cached_stats(self):
+        """Calling process_chunk with the same index twice returns cached stats
+        without re-executing the O(u·n) sweep."""
+        import warnings
+
+        state = IncrementalState()
+
+        def checker(a, b):
+            return a.get("type") == b.get("type")
+
+        # First call: processes normally
+        stats_first = state.process_chunk(0, {"u1": {"type": "A"}, "u2": {"type": "A"}}, checker)
+        assert stats_first["chunk_index"] == 0
+
+        # Second call with same index: should warn and return cached stats
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            stats_second = state.process_chunk(0, {"u1": {"type": "A"}, "u2": {"type": "A"}}, checker)
+            assert len(w) == 1
+            assert "called more than once" in str(w[0].message)
+
+        # Cached stats returned unchanged
+        assert stats_second == stats_first
+
+    def test_double_call_does_not_double_count_entities(self):
+        """Redundant process_chunk calls must not inflate entity or pair counts."""
+        state = IncrementalState()
+
+        def checker(a, b):
+            return True  # always match
+
+        import warnings
+        state.process_chunk(0, {"u1": {}, "u2": {}}, checker)
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            state.process_chunk(0, {"u1": {}, "u2": {}}, checker)
+            state.process_chunk(0, {"u1": {}, "u2": {}}, checker)
+
+        stats = state.get_stats()
+        # Despite 3 calls to process_chunk(0,...), only 1 chunk should be counted
+        assert stats["chunks_processed"] == 1
+        assert stats["total_entities"] == 2
+        assert stats["total_pairs"] == 1  # C(2,2) = 1
+
+    def test_different_chunk_indices_are_independent(self):
+        """Each unique chunk_index is processed exactly once."""
+        state = IncrementalState()
+
+        def checker(a, b):
+            return a.get("type") == b.get("type")
+
+        import warnings
+        state.process_chunk(0, {"u1": {"type": "A"}}, checker)
+        state.process_chunk(1, {"u2": {"type": "A"}}, checker)
+
+        # Redundant call on chunk 0 — should not re-process
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            state.process_chunk(0, {"u3": {"type": "A"}}, checker)
+            assert len(w) == 1
+
+        stats = state.get_stats()
+        # u3 should NOT appear — chunk 0 was cached
+        assert stats["total_entities"] == 2  # only u1, u2
+        assert stats["chunks_processed"] == 2
+
+
 class TestNonMonotonicRetraction:
     """Test the retraction mechanism for Task 19-style non-monotonic conditions."""
 
