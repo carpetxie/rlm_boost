@@ -175,6 +175,9 @@ class RLM:
             env_kwargs["lm_handler_address"] = (lm_handler.host, lm_handler.port)
             env_kwargs["context_payload"] = prompt
             env_kwargs["depth"] = self.depth + 1  # Environment depth is RLM depth + 1
+            # Pass persistent flag so the environment can inject incremental primitives
+            # (_incremental, EntityCache, PairTracker) during setup().
+            env_kwargs["persistent"] = self.persistent
             environment: BaseEnv = get_environment(self.environment_type, env_kwargs)
 
             if self.persistent:
