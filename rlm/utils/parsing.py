@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING
 
 from rlm.core.types import REPLResult, RLMIteration
 
+# Shared prefix string for REPL variable listing in format_execution_result().
+# Imported by history_manager.generate_turn_summary() to avoid silent decoupling
+# if the format string ever changes.
+REPL_VARS_PREFIX = "REPL variables:"
+
 if TYPE_CHECKING:
     from rlm.environments.base_env import BaseEnv
 
@@ -131,7 +136,7 @@ def format_execution_result(result: REPLResult) -> str:
                 important_vars[key] = ""
 
     if important_vars:
-        result_parts.append(f"REPL variables: {list(important_vars.keys())}\n")
+        result_parts.append(f"{REPL_VARS_PREFIX} {list(important_vars.keys())}\n")
 
     return "\n\n".join(result_parts) if result_parts else "No output"
 
