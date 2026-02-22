@@ -117,6 +117,50 @@ export PRIME_API_KEY=...
 ### Model Providers
 We currently support most major clients (OpenAI, Anthropic), as well as the router platforms (OpenRouter, Portkey, LiteLLM). For local models, we recommend using vLLM (which interfaces with the [OpenAI client](https://github.com/alexzhang13/rlm/blob/main/rlm/clients/openai.py)). To view or add support for more clients, start by looking at [`rlm/clients/`](https://github.com/alexzhang13/rlm/tree/main/rlm/clients).
 
+## Research: Incremental Computation in RLMs
+
+This fork explores **incremental computation** for RLMs — making them efficient when context arrives over time rather than all at once.
+
+### The Problem
+
+Standard RLMs re-read the *entire* context from scratch on every call. If context arrives in 5 chunks over time (streaming data, multi-turn conversations), the naive approach re-processes everything 5 times — O(n²) total work. But most of the context hasn't changed between chunks.
+
+### The Approach
+
+We built an incremental computation framework inside the RLM REPL:
+
+1. **First chunk**: Process all entities, classify them, find matching pairs, cache everything in persistent Python objects (`EntityCache`, `PairTracker`, `IncrementalState`)
+2. **Subsequent chunks**: Process only new entities, check them against cached classifications
+3. **Handle retractions**: When new data invalidates a previously correct answer (e.g., "exactly one location tag" violated by a second tag in a later chunk), the system detects this, retracts affected pairs via an inverted index, and re-evaluates them
+
+The retraction mechanism is the core novelty — real-world conditions aren't always monotonic, and no prior incremental computation work in the LLM space handles non-monotonic updates.
+
+### Key Results (12 research iterations)
+
+- **94.3% of oracle F1** with P=1.0 (zero false positives) when processing 25K chars of OOLONG-Pairs data across 5 streaming turns
+- **22–42% pair-check savings** at k=5 and k=10 chunks, with 100% correctness validation at every chunk
+- **360x retraction range** across task types (138 retractions for strict conditions vs 15,824 for broad ones), driven by condition semantics rather than data volume
+- **49x temporal retraction asymmetry**: "before DATE" constraints produce far fewer retractions than "after DATE" due to monotonic vs bidirectional validity
+- **Cost model**: `savings(k, σ) ≈ 51*(1-2.93/k) + 8.9*σ*(1+1.60/k)` (R²=0.936), break-even at k≥4
+
+### Architecture
+
+| File | Purpose |
+|------|---------|
+| `rlm/core/incremental.py` | EntityCache, PairTracker, IncrementalState with retraction support |
+| `rlm/core/history_manager.py` | Message history pruning for persistent multi-turn mode |
+| `rlm/utils/prompts.py` | INCREMENTAL_SYSTEM_PROMPT — protocol for incremental computation |
+| `eval/incremental_simulation.py` | Simulation with real task conditions and correctness validation |
+| `eval/sigma_cost_model.py` | Cost model fitting and retraction analysis |
+
+### Open Questions
+
+- **Dynamic benchmarks**: All current evaluation uses artificially chunked static data. Genuinely dynamic benchmarks (Wikipedia edits, live conversations) remain future work.
+- **k-sensitivity**: How do savings scale across k={3, 5, 7, 10} chunks? The cost model predicts it but empirical validation is incomplete.
+- **Multi-run stability**: The 94.3% headline comes from the best of 2 runs; the other achieved 69.5%. Stability under the monotone attribute fix needs confirmation.
+
+See `docs/research_log.md` for the full experiment log.
+
 ## Relevant Reading
 * **[Dec '25]** [Recursive Language Models arXiv](https://arxiv.org/abs/2512.24601)
 * **[Oct '25]** [Recursive Language Models Blogpost](https://alexzhang13.github.io/blog/2025/rlm/)
