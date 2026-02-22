@@ -19,6 +19,7 @@ This implements a "sliding window + summary" approach:
 
 from __future__ import annotations
 
+import ast
 import re
 from typing import Any
 
@@ -193,34 +194,69 @@ class HistoryManager:
         return len(message_history)
 
     @staticmethod
+    def _extract_assigned_names(code: str) -> set[str]:
+        """Extract top-level assigned variable names from code using AST parsing.
+
+        Uses ast.parse() instead of string heuristics to reliably identify
+        simple name assignments (e.g. `x = ...`, `def f():`) while correctly
+        ignoring augmented assignments, comparisons, f-strings with =, and
+        subscript assignments that the old "=" heuristic incorrectly captured.
+
+        Returns only non-underscore names at module scope.
+        """
+        names: set[str] = set()
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return names
+
+        for node in ast.walk(tree):
+            # Simple assignment: x = ..., x, y = ...
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and not target.id.startswith("_"):
+                        names.add(target.id)
+                    elif isinstance(target, ast.Tuple):
+                        for elt in target.elts:
+                            if isinstance(elt, ast.Name) and not elt.id.startswith("_"):
+                                names.add(elt.id)
+            # Annotated assignment: x: int = ...
+            elif isinstance(node, ast.AnnAssign):
+                if isinstance(node.target, ast.Name) and not node.target.id.startswith("_"):
+                    names.add(node.target.id)
+            # Function definition: def f():
+            elif isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                names.add(node.name)
+            # Class definition: class C:
+            elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+                names.add(node.name)
+
+        return names
+
+    @staticmethod
     def _build_iteration_summary(old_messages: list[dict[str, Any]], turn_number: int) -> str:
         """Build a compact summary of old iteration messages.
 
         Extracts:
         - Code that was executed (abbreviated)
-        - Variables created
+        - Variables created (via AST parsing for correctness)
         - Key outputs
         """
         code_blocks = []
         outputs = []
-        variables_mentioned = set()
+        variables_mentioned: set[str] = set()
 
         for msg in old_messages:
             content = msg.get("content", "")
             role = msg.get("role", "")
 
             if role == "user" and "Code executed:" in content:
-                # Extract code
+                # Extract code block
                 code_match = re.search(r"```python\n(.*?)```", content, re.DOTALL)
                 if code_match:
                     code = code_match.group(1).strip()
-                    # Keep only variable assignments and important operations
-                    for line in code.split("\n"):
-                        stripped = line.strip()
-                        if "=" in stripped and not stripped.startswith("#"):
-                            var_name = stripped.split("=")[0].strip()
-                            if var_name and not var_name.startswith("_"):
-                                variables_mentioned.add(var_name)
+                    # Use AST parsing for reliable variable name extraction
+                    variables_mentioned |= HistoryManager._extract_assigned_names(code)
                     code_blocks.append(code[:200])  # Truncate long blocks
 
                 # Extract REPL output (abbreviated)
@@ -230,7 +266,7 @@ class HistoryManager:
                         outputs.append(output_part[:150])
 
             elif role == "assistant":
-                # Extract key reasoning points (first 100 chars)
+                # Extract key reasoning points (first 150 chars)
                 if content and len(content) > 10:
                     outputs.append(f"Model reasoning: {content[:150]}...")
 
