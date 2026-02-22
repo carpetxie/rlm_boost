@@ -1,0 +1,12 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
+
+**Scores**: Novelty 6/10 (+1), Technical Soundness 7/10 (+2), Benchmark Performance 6/10 (+1), Scalability 5/10 (+0), Research Maturity 5/10 (+1)
+
+**Key findings from code review**:
+1. **New bug discovered**: `PairTracker.retract_entity()` double-counts retractions when both entities in a pair are updated in the same chunk — inflating reported retraction counts by ~34% for Task 1. Correctness is unaffected, only statistics.
+2. **Code duplication**: `compute_gold_pairs()` duplicates all 164 lines of `_check_pair_condition()` inline — a maintenance time bomb.
+3. **Import inside hot loop** in the simulation's full-recompute path.
+
+**The One Big Thing**: Run the mock-LM integration test. This has been proposed for 3 iterations and never executed. The simulation has reached diminishing returns — the next valuable data point comes from testing whether an LLM actually follows the incremental protocol end-to-end.
+
+**Five prioritized experiments**: (1) Mock-LM integration test, (2) Weighted token savings calculation (5 min, nearly doubles the headline number), (3) Temporal task sweep (zero code change), (4) Formalize cost model, (5) Fix retraction double-counting.
