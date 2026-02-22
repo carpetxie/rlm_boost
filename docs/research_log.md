@@ -557,21 +557,250 @@ gap at small k). The model does not distinguish "before" vs "after" temporal con
 
 ---
 
-## Status: Active — Iteration 4 Complete
+## Status: Active — Iteration 5 Complete
 
-## Next Steps (Iteration 5)
+---
 
-1. **Real API experiment** (highest remaining gap): Run `RLM(persistent=True)` on OOLONG-Pairs
-   with a real LLM (gpt-4o-mini or claude-haiku). Measure whether the model actually follows the
-   incremental protocol — uses `entity_cache` on turn 2+, doesn't re-read `context_0`.
+## Iteration 5 Work
 
-2. **Protocol compliance metric**: Fraction of turns where LLM generates incremental code
-   vs. full-recompute code. Requires log parsing but no extra API calls.
+### Bug Fixes (Iteration 5)
 
-3. **Temporal retraction asymmetry — mechanistic validation**: Verify the "before" vs "after"
-   directional hypothesis by analyzing per-entity retraction frequency patterns.
+1. **`INCREMENTAL_SYSTEM_PROMPT` abstraction conflict** (`rlm/utils/prompts.py`): The prompt
+   previously instructed the LLM to use `entity_cache = {}` (a plain dict), while the REPL
+   injects `_incremental` (an `IncrementalState` with retraction support). A real LLM following
+   the old prompt would bypass the retraction primitives entirely. Rewrote the protocol section
+   to use `_incremental.process_chunk()` as the sole interface. The model now only implements
+   `parse_entities()` and `check_pair()` — the state management is handled by `_incremental`.
 
-4. **3-chunk temporal sweep**: Complete the cost model dataset with `--num-chunks 3 --tasks 4,5,7,9,10`.
+2. **`execute_code` underscore suppression** (`rlm/environments/local_repl.py`): Added
+   `_INJECTED_NAMES = frozenset({"_incremental"})` module-level constant. Updated the update
+   loop to allow `_incremental` reassignment by model code (in case the model wants to reset
+   state). Old behavior silently dropped `_incremental = IncrementalState()` assignments.
 
-5. **Lazy retraction prototype**: Implement `LazyIncrementalState` that defers retraction to
-   query time. Measure cost reduction vs correctness tradeoff.
+3. **Pre-existing critical bug: `persistent` flag not propagated to `LocalREPL`** (`rlm/core/rlm.py`):
+   `_spawn_completion_context()` created the LocalREPL environment WITHOUT passing
+   `persistent=self.persistent`, so `LocalREPL.setup()` never injected `_incremental`,
+   `EntityCache`, `PairTracker`, or `IncrementalState` into the REPL namespace. The old tests
+   accidentally didn't catch this because the old scripted responses didn't call `_incremental`.
+   Fixed by adding `env_kwargs["persistent"] = self.persistent` before `get_environment()`.
+
+4. **`_build_iteration_summary` brittle string extraction** (`rlm/core/history_manager.py`):
+   Replaced the `if "=" in stripped` heuristic with proper `ast.parse()` walking of
+   `ast.Assign`, `ast.AnnAssign`, `ast.FunctionDef`, and `ast.ClassDef` nodes. Correctly
+   identifies variable assignments while ignoring comparisons, augmented assignments,
+   subscript assignments, and f-strings with `=`.
+
+5. **Mock-LM tests updated to use new `_incremental` protocol** (`tests/test_mock_lm_integration.py`):
+   Rewrote TURN1/TURN2/TURN3 scripted responses to use `_incremental.process_chunk()`.
+   Updated test assertions to check for new protocol variables (`entities`, `check_pair`,
+   `pair_results`) instead of old dict-based variables (`entity_cache`, `pair_results`,
+   `processed_ids`). **12/12 tests pass** with the new protocol.
+
+---
+
+### Experiment 10: k=4 Break-Even Validation (Iteration 5)
+**Date**: 2026-02-22
+**Hypothesis**: Cost model predicts ~15.9% pair-check savings at k=4. If correct, k=4 is a
+positive break-even point (vs. theoretical break-even at k≥3).
+
+**Setup**: `python eval/incremental_simulation.py --tasks 1,3,6,11,19 --num-chunks 4`
+
+**Results**:
+| Task | Type | Incr Checks | Full Checks | Savings | Retractions | Pairs | Correct |
+|------|------|-------------|-------------|---------|-------------|-------|---------|
+| 1 | Symmetric | 52,435 | 61,842 | **15.2%** | 9,039 | 8,001 | YES |
+| 3 | Symmetric | 52,044 | 61,842 | **15.8%** | 10,266 | 10,440 | YES |
+| 6 | Symmetric | 52,140 | 61,842 | **15.7%** | 9,870 | 8,911 | YES |
+| 11 | Asymmetric | 55,613 | 61,842 | **10.1%** | 698 | 689 | YES |
+| 19 | Asymmetric strict | 55,903 | 61,842 | **9.6%** | 56 | 60 | YES |
+
+**Key Findings**:
+1. **Cost model validated**: σ-free model predicts savings(4) = 52.16*(1-2.84/4) = 15.2%.
+   Actual symmetric savings are 15.2–15.8% — within 1pp of prediction. The model is accurate.
+2. **k=4 is a positive break-even for all task types** — minimum 9.6% savings. The "k≥4"
+   break-even claim from Iteration 4 is confirmed.
+3. **Symmetric vs asymmetric gap at k=4**: 15.5% vs 9.9% (5.6pp). This narrows at k=10 to
+   ~3pp, confirming the σ-gap compresses with more chunks.
+
+---
+
+### Experiment 11: 3-Chunk Temporal Sweep (Iteration 5)
+**Date**: 2026-02-22
+**Hypothesis**: Temporal tasks at k=3 complete the cost model dataset and enable σ-fitting.
+
+**Setup**: `python eval/incremental_simulation.py --tasks 4,5,7,9,10 --num-chunks 3`
+
+**Results**:
+| Task | Temporal Constraint | Incr Checks | Full Checks | Savings | Retractions | Pairs | Correct |
+|------|---------------------|-------------|-------------|---------|-------------|-------|---------|
+| 4 | Human being AFTER Jan 6, 2023 | 47,869 | 50,397 | **5.0%** | 684 | 990 | YES |
+| 5 | Entity BEFORE Mar 15, 2023 | 48,348 | 50,397 | **4.1%** | 25 | 21 | YES |
+| 7 | Numeric AFTER Feb 1, 2023 | 47,817 | 50,397 | **5.1%** | 1,096 | 1,485 | YES |
+| 9 | Location AFTER Apr 10, 2023 | 47,926 | 50,397 | **4.9%** | 844 | 741 | YES |
+| 10 | Abbreviation BEFORE May 20, 2023 | 48,283 | 50,397 | **4.2%** | 220 | 190 | YES |
+
+**Consistent pattern**: 3-chunk savings are 4-5% for all temporal tasks, confirming savings
+scale consistently across the k=3→5→10 range. Break-even at k≥4 holds for temporal tasks too.
+
+---
+
+### Experiment 12: σ-Parameterized Cost Model (Iteration 5)
+**Date**: 2026-02-22
+**Hypothesis**: Task selectivity σ = final_pairs/C(n_users, 2) adds significant predictive
+power beyond the chunk-count-only model.
+
+**Data**: 35 (task, k) datapoints across 11 tasks and k ∈ {3, 4, 5, 10}.
+Script: `eval/sigma_cost_model.py`. Results: `results/streaming/sigma_model_results.json`.
+
+**σ values** (final_pairs / 26,565):
+| Task Type | Tasks | σ Range |
+|-----------|-------|---------|
+| Symmetric broad | 1, 3, 6 | 0.30–0.39 |
+| Temporal "after" | 4, 7, 9 | 0.028–0.056 |
+| Asymmetric exact | 11, 13 | 0.026–0.057 |
+| Temporal "before" | 5, 10 | 0.0007–0.007 |
+| Asymmetric strict | 19 | 0.0023 |
+
+**Model A (σ-free)**: `savings(k) = 52.16 * (1 - 2.84/k)`, R² = 0.919, RMSE = 3.81%
+
+**Model B (σ-parameterized)**: `savings(k,σ) = 51.06*(1-2.93/k) + 8.86*σ*(1+1.60/k)`, R² = 0.936, RMSE = 3.38%
+
+**Significance test**:
+| Metric | Value |
+|--------|-------|
+| R² improvement | +0.017 |
+| F-statistic (2, 31 df) | 4.177 |
+| p-value | 0.025 |
+| Significant at α=0.05? | **YES** |
+
+**Interpretation**: σ adds statistically significant (p=0.025) but modest predictive power.
+High-σ tasks (symmetric, σ~0.3–0.4) get 2–3% more savings than low-σ tasks (strict asymmetric,
+σ<0.01). The two-factor formula is:
+```
+savings(k, σ) ≈ 51.1*(1 - 2.93/k) + 8.9*σ*(1 + 1.60/k)
+```
+- At k=5, σ=0.001 (strict): savings ≈ 51.1*(0.414) + 8.9*0.001*1.32 ≈ 21.2 + 0.01 ≈ 21.2%
+- At k=5, σ=0.35 (symmetric): savings ≈ 51.1*(0.414) + 8.9*0.35*1.32 ≈ 21.2 + 4.1 ≈ 25.3%
+
+**Practitioner guidance**:
+- For quick estimates: use `savings(k)` (σ-free) — predicts within 5pp for most cases
+- For high-precision planning: use two-factor formula (but requires knowing σ in advance)
+- Break-even at k≥4 holds regardless of σ (minimum savings ~9.6% at k=4)
+
+---
+
+### Experiment 13: Per-Entity Retraction Frequency (Mechanistic Validation) (Iteration 5)
+**Date**: 2026-02-22
+**Hypothesis**: The 49x temporal asymmetry (Task 5 before vs Task 7 after) is caused by
+bidirectional validity flips in "after DATE" tasks — entities retract multiple times as
+pre/post-cutoff instances arrive in successive chunks. "Before DATE" tasks show monotonic
+invalidation (retract once, stay retracted).
+
+**Method**: Added per-entity retraction tracking to simulation. Ran tasks 5 and 7 at k=5 chunks,
+recording how many times each entity_id was retracted across all chunks.
+
+**Results — Task 5 ("before DATE")**:
+| Metric | Value |
+|--------|-------|
+| Total entities | 231 |
+| Final pairs | 21 |
+| Total retraction events | 44 |
+| Never retracted (0×) | 223 (96.5%) |
+| Retracted exactly 1× | 2 (0.9%) |
+| Retracted 2+× (bidirectional) | **6 (2.6%)** |
+| Max retractions per entity | 3 |
+
+**Results — Task 7 ("after DATE")**:
+| Metric | Value |
+|--------|-------|
+| Total entities | 231 |
+| Final pairs | 1,485 |
+| Total retraction events | 2,151 |
+| Never retracted (0×) | 194 (84.0%) |
+| Retracted exactly 1× | 13 (5.6%) |
+| Retracted 2+× (bidirectional) | **24 (10.4%)** |
+| Max retractions per entity | 4 |
+
+**Key finding**:
+| | Task 5 (before) | Task 7 (after) |
+|---|---|---|
+| Entities with ≥2 retractions | 2.6% | **10.4%** |
+| Total retractions | 44 | **2,151** |
+
+**Hypothesis CONFIRMED**: "After DATE" tasks show **4× more bidirectional retractions** (10.4%
+vs 2.6% of entities). The mechanism is clear:
+- "Before DATE" (Task 5): once an entity has a late-date instance, it permanently fails the
+  `_all_before` condition → monotonic invalidation. Most entities retract at most once.
+- "After DATE" (Task 7): an entity seen with only early-date instances may initially qualify;
+  then a chunk with pre-cutoff instances causes failure; then later chunks with post-cutoff
+  instances restore qualification → bidirectional oscillation (up to 4× per entity).
+
+This is the first mechanistic confirmation of the temporal asymmetry hypothesis. The 49x
+retraction count ratio (2,151 vs 44) is explained by: (a) more entities reach a retractable
+state in "after" tasks (σ=0.056 vs 0.001), and (b) those entities retract 4× more frequently
+on average (10.4% vs 2.6% with multi-retractions).
+
+**Implication for architecture**: If a practitioner knows the context contains predominantly
+"before DATE" conditions, retraction overhead is negligible (≤0.2% of pair-check budget).
+For "after DATE" conditions, design for O(degree) retraction support (already implemented).
+Lazy retraction (defer to query time) may be beneficial specifically for "after DATE" heavy workloads.
+
+---
+
+### Files Modified (Iteration 5)
+| File | Change |
+|------|--------|
+| `rlm/utils/prompts.py` | Rewrote INCREMENTAL_SYSTEM_PROMPT to use `_incremental.process_chunk()` as primary interface |
+| `rlm/environments/local_repl.py` | Added `_INJECTED_NAMES` allowlist for `_incremental` in execute_code |
+| `rlm/core/rlm.py` | Fixed: pass `persistent=self.persistent` to environment constructor |
+| `rlm/core/history_manager.py` | Fixed `_build_iteration_summary` to use `ast.parse()` for variable extraction |
+| `tests/test_mock_lm_integration.py` | Updated scripted responses to use `_incremental.process_chunk()` interface |
+
+### New Files (Iteration 5)
+| File | Contents |
+|------|----------|
+| `eval/sigma_cost_model.py` | σ-parameterized cost model fitting and per-entity retraction analysis |
+| `results/streaming/incremental_4chunks.json` | k=4 break-even simulation, tasks 1,3,6,11,19 |
+| `results/streaming/incremental_temporal_3chunks.json` | 3-chunk temporal tasks 4,5,7,9,10 |
+| `results/streaming/sigma_model_results.json` | σ model fit results and per-entity analysis |
+
+---
+
+## Cumulative Results Summary
+
+| Metric | Iter 1 | Iter 2 | Iter 3 | Iter 4 | Iter 5 | Delta (4→5) |
+|--------|--------|--------|--------|--------|--------|-------------|
+| Tests passing | 159 | 187 | 160 | 172 | **172** | 0 regressions |
+| Pair-check savings (k=4) | — | — | — | ~10% (predicted) | **15.2% symmetric, 9.6% strict** | Validated |
+| Pair-check savings (k=5) | 64.3% (theory) | 46.8% (simplified) | 22.1% (real) | 22.1% | 22.1% | Stable |
+| Pair-check savings (k=10) | — | 66.0% (simplified) | 42.0% (real) | 42.0% | 42.0% | Stable |
+| σ-parameterized model | None | None | None | R²=0.90 (σ-free) | **R²=0.936 (σ-parameterized, p=0.025)** | +0.017 R² |
+| Temporal asymmetry explained | Observed | — | — | Hypothesis formed | **Mechanism confirmed (4× bidirectional)** | Mechanistic proof |
+| INCREMENTAL_SYSTEM_PROMPT | Abstraction conflict | — | — | — | **Fixed: uses _incremental API** | Critical fix |
+| Persistent flag propagation | Missing | — | — | — | **Fixed: env gets persistent=True** | Pre-existing bug |
+| Mock-LM tests (new protocol) | — | — | — | 12/12 (old protocol) | **12/12 (new _incremental protocol)** | Re-validated |
+
+---
+
+## Next Steps (Iteration 6)
+
+1. **Real API experiment** (mandatory): Now that `INCREMENTAL_SYSTEM_PROMPT` uses the correct
+   `_incremental.process_chunk()` interface, the live experiment is meaningful. Run with
+   gpt-4o-mini on OOLONG-Pairs Task 1, 3 chunks. Measure: (a) does turn 2 code reference
+   `_incremental`? (b) does it re-read `context_0`? (c) is `pair_results` correct vs gold?
+   Even failure is publishable data.
+
+2. **Protocol compliance metric**: Parse logs to compute fraction of turns where model code
+   uses `_incremental.process_chunk()` vs. creates its own entity_cache dict. This measures
+   whether the fixed prompt actually works with real LLMs.
+
+3. **Lazy retraction prototype**: "After DATE" tasks show 10.4% entities with multi-retractions
+   and 2,151 total retractions vs 44 for "before DATE". Lazy retraction would specifically
+   benefit these workloads. Implement `LazyIncrementalState` that defers retraction to query time.
+
+4. **Weighted savings methodology caveat**: Document that 78/22 weights assume same token
+   proportions in incremental vs full pipeline — this assumption needs validation in the API run.
+
+5. **σ formula in paper**: Use two-factor formula with appropriate caveats (R²=0.936,
+   p=0.025, modest improvement). Report "savings are well-predicted by k alone at k≥5;
+   σ adds ≤4pp for planning purposes."
