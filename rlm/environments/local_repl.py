@@ -112,6 +112,12 @@ _SAFE_BUILTINS = {
 }
 
 
+# Names injected by setup() that use underscore prefix but must be writable by model code.
+# Without this allowlist, model code like `_incremental = IncrementalState()` would silently
+# fail because execute_code filters out all underscore-prefixed keys from the locals update.
+_INJECTED_NAMES: frozenset[str] = frozenset({"_incremental"})
+
+
 class LocalREPL(NonIsolatedEnv):
     """
     Local REPL environment with persistent Python namespace.
@@ -375,9 +381,14 @@ class LocalREPL(NonIsolatedEnv):
                 combined = {**self.globals, **self.locals}
                 exec(code, combined, combined)
 
-                # Update locals with new variables
+                # Update locals with new variables.
+                # Underscore-prefixed names are skipped by default (Python internals),
+                # except for explicitly injected names like `_incremental` which model
+                # code may legitimately reassign (e.g., to reset state).
                 for key, value in combined.items():
-                    if key not in self.globals and not key.startswith("_"):
+                    if key not in self.globals and (
+                        not key.startswith("_") or key in _INJECTED_NAMES
+                    ):
                         self.locals[key] = value
 
                 stdout = stdout_buf.getvalue()
