@@ -131,6 +131,7 @@ def build_user_prompt(
     iteration: int = 0,
     context_count: int = 1,
     history_count: int = 0,
+    cached_vars: dict[str, str] | None = None,
 ) -> dict[str, str]:
     if iteration == 0:
         safeguard = "You have not interacted with the REPL environment or seen your prompt / context yet. Your next action should be to look through and figure out how to answer the prompt, so don't just provide a final answer yet.\n\n"
@@ -152,5 +153,14 @@ def build_user_prompt(
             prompt += "\n\nNote: You have 1 prior conversation history available in the `history` variable."
         else:
             prompt += f"\n\nNote: You have {history_count} prior conversation histories available (history_0 through history_{history_count - 1})."
+
+    # Incremental computation: inform the model about cached REPL state from prior turns
+    if cached_vars:
+        vars_desc = ", ".join(f"`{name}` ({vtype})" for name, vtype in cached_vars.items())
+        prompt += (
+            f"\n\n**INCREMENTAL STATE**: The REPL already contains variables from prior turns: {vars_desc}. "
+            f"You can use SHOW_VARS() to inspect them. Build on existing computations instead of re-computing from scratch. "
+            f"Only process NEW data (the latest context) and merge results with cached state."
+        )
 
     return {"role": "user", "content": prompt}
