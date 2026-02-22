@@ -1,0 +1,24 @@
+## Summary of Iteration 2
+
+Here's what was accomplished in this iteration:
+
+### 🔬 Key Experiment Result
+**Incremental computation with retraction** achieves **46.8% pair-check savings at 5 chunks** and **66.0% at 10 chunks** — down from the theoretical 64.3%/80.3% due to retraction overhead (14-18pp). This is the first measurement of *realistic* incremental savings including non-monotonic updates.
+
+### 🏗️ Architecture Changes (4 new capabilities)
+
+1. **Message History Pruning** (`rlm/core/history_manager.py`) — Three strategies (sliding_window, summarize, token_budget) to keep message history bounded in persistent mode. The "summarize" strategy replaces old iterations with a compact computation summary.
+
+2. **Delta-Aware Incremental System Prompt** (`rlm/utils/prompts.py`) — `INCREMENTAL_SYSTEM_PROMPT` that instructs the model to follow the incremental protocol: parse only new entities, check only new pairs, handle retractions.
+
+3. **Incremental Computation Primitives** (`rlm/core/incremental.py`) — `EntityCache` (versioned entity storage), `PairTracker` (with retraction via inverted index), `IncrementalState` (full pipeline with `process_chunk()`). These are injected into the REPL in persistent mode.
+
+4. **REPL Integration** — Persistent REPL now has `EntityCache`, `PairTracker`, `IncrementalState`, and `_incremental` available as first-class tools.
+
+### ✅ Testing
+- **28 new tests** covering EntityCache, PairTracker, IncrementalState, HistoryManager, REPL integration, and non-monotonic retraction
+- **Full suite: 159 tests passing** (no regressions)
+- **Lint clean** (ruff check + format)
+
+### 🔍 Key Novel Finding
+**Retraction overhead is bounded and predictable** — proportional to entities in multiple chunks, decreasing relative to full recompute as context grows. This means we can predict cost, optimize retraction (lazy evaluation), and choose strategy by task type.
