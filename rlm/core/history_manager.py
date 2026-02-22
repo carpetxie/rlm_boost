@@ -23,6 +23,8 @@ import ast
 import re
 from typing import Any
 
+from rlm.utils.parsing import REPL_VARS_PREFIX
+
 
 class HistoryManager:
     """Manages message history with bounded growth for persistent RLM.
@@ -311,8 +313,8 @@ class HistoryManager:
         variables = set()
         for msg in iteration_messages:
             content = msg.get("content", "")
-            if "REPL variables:" in content:
-                var_match = re.search(r"REPL variables: \[(.*?)\]", content)
+            if REPL_VARS_PREFIX in content:
+                var_match = re.search(rf"{re.escape(REPL_VARS_PREFIX)} \[(.*?)\]", content)
                 if var_match:
                     for v in var_match.group(1).split(","):
                         v = v.strip().strip("'\"")
