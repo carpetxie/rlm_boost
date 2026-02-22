@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from eval.utils import _check_pair_condition  # top-level import (not in hot loop)
 from rlm.core.incremental import IncrementalState
 
 
@@ -44,8 +45,7 @@ def parse_users_from_labeled(labeled_text: str) -> dict[int, list[dict]]:
     This preserves the full instance data needed for real task checking
     (including dates for temporal constraints in tasks 4,5,7,9,10).
     """
-    from eval.utils import _parse_labeled_context
-
+    from eval.utils import _parse_labeled_context  # local ok: not called in hot loop
     return _parse_labeled_context(labeled_text)
 
 
@@ -97,8 +97,6 @@ def make_task_checker(task_idx: int):
     The checker operates on instance lists: [{"date": datetime, "label": str}, ...]
     stored as entity attributes in the EntityCache.
     """
-    from eval.utils import _check_pair_condition
-
     def checker(attrs1: dict, attrs2: dict) -> bool:
         """Check if two users form a valid pair based on their cached instances."""
         return _check_pair_condition(attrs1["instances"], attrs2["instances"], task_idx)
@@ -187,8 +185,6 @@ def run_incremental_simulation(
             # Compute full-recompute pairs for correctness check
             full_pairs_set = set()
             for uid1, uid2 in combinations(all_ids, 2):
-                from eval.utils import _check_pair_condition
-
                 if _check_pair_condition(cumulative_users[uid1], cumulative_users[uid2], task_idx):
                     full_pairs_set.add((min(uid1, uid2), max(uid1, uid2)))
 
