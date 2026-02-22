@@ -124,11 +124,18 @@ class PairTracker:
         with the entity's new classification).
 
         This is the key operation for non-monotonic incremental computation.
+        Also cleans up the partner entity's inverted index to prevent stale
+        references that would cause double-counting when the partner is also
+        retracted in the same chunk.
         """
         affected = self._entity_pairs.get(entity_id, set()).copy()
         for pair in affected:
             self._pairs.discard(pair)
             self._retracted.add(pair)
+            # Clean up partner's inverted index to prevent double-counting
+            partner = pair[1] if pair[0] == entity_id else pair[0]
+            if partner in self._entity_pairs:
+                self._entity_pairs[partner].discard(pair)
         self._retraction_count += len(affected)
         # Clear this entity's pair index (will be rebuilt on re-evaluation)
         self._entity_pairs[entity_id] = set()
@@ -217,7 +224,9 @@ class IncrementalState:
         for eid in updated_ids:
             retracted = self.pair_tracker.retract_entity(eid)
             retracted_pairs |= retracted
-            self._total_retractions += len(retracted)
+        # Count deduplicated retractions (partner cleanup in retract_entity
+        # prevents double-counting, but we use set size for belt-and-suspenders)
+        self._total_retractions += len(retracted_pairs)
 
         # 3. Check pairs incrementally (if checker provided)
         new_pairs = 0
