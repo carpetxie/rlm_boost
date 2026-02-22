@@ -1,0 +1,25 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here is a summary of what Iteration 9 found:
+
+---
+
+## Critique Summary — Iteration 9
+
+**Overall**: Iteration 8 delivered the monotone F1 progression [0.22→0.51], but introduced two paper-blocking implementation failures that were not caught before results were logged.
+
+### Three Paper-Blocking Issues Found from Code Inspection
+
+1. **Condition B/C both return F1=0.0** (confirmed from `f1_progression_results.json`): Both baselines fail with Failure Mode B — the model returns `FINAL("...natural language...")` instead of `FINAL_VAR(pair_results)`. The extraction code `eval(response_str.strip())` requires a Python list literal; it gets prose. The comparison table (A=0.51, B=0.0, C=0.0) cannot be published. **Fix**: use `persistent=True` with the same code template and extract from `env.locals` directly.
+
+2. **All token counts are zero** (`input_tokens: 0` for all 5 turns): The `isinstance(mu, dict)` check in the usage extraction loop silently fails when `usage.to_dict()` returns object-valued entries. The paper has no cost data from its central experiment.
+
+3. **Precision decline unexplained (FP rate: 12%→46% across k=1..5)**: At k=5, 3,312 of 7,140 predicted pairs are false positives. The check_pair function and gold condition are nominally identical, so the FPs likely come from entity IDs extracted from plain text that don't correspond to labeled instances in the gold. This is a grounding mismatch that needs quantification before precision numbers are finalized.
+
+### Scores
+- **Novelty: 7/10** (unchanged) — Non-monotonic retraction taxonomy + failure mode taxonomy genuinely novel; generalization to Tasks 3/6 still missing
+- **Technical Soundness: 6/10** (−1) — Broken comparison table is a regression from Iteration 7's structural correctness
+- **Benchmark Performance: 7/10** (+1) — Monotone F1 curve is confirmed; oracle comparison unknown
+- **Scalability: 6/10** (unchanged) — History pruning at k≥4 unverified; FP rate grows at scale
+- **Research Maturity: 6/10** (−1) — The experiment was run but produced invalid results; the paper cannot be submitted yet
+
+### The One Big Thing
+Fix Conditions B and C to use `persistent=True` with direct `env.locals` extraction (not `completion.response` parsing), fix the token tracking bug, then re-run the comparison. This resolves the single most critical gap (~$5, 2–3 hours with implementation).
