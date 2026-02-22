@@ -227,6 +227,12 @@ class HistoryManager:
         subscript assignments that the old "=" heuristic incorrectly captured.
 
         Returns only non-underscore names at module scope.
+
+        Iteration 10 fix: replaced `ast.walk(tree)` with direct iteration over
+        `tree.body` (module-level statements only). `ast.walk()` recursively
+        descends into function bodies and nested scopes, causing variables defined
+        inside helper functions to appear in history summaries as module-scope
+        variables — confusing the model on the next turn.
         """
         names: set[str] = set()
         try:
@@ -234,7 +240,9 @@ class HistoryManager:
         except SyntaxError:
             return names
 
-        for node in ast.walk(tree):
+        # Iterate only tree.body (module-level statements) to avoid capturing
+        # variables inside function bodies, class methods, and nested scopes.
+        for node in tree.body:
             # Simple assignment: x = ..., x, y = ...
             if isinstance(node, ast.Assign):
                 for target in node.targets:
@@ -265,10 +273,20 @@ class HistoryManager:
         - Code that was executed (abbreviated)
         - Variables created (via AST parsing for correctness)
         - Key outputs
+        - Last chunk_index processed (Iteration 10: extracted from process_chunk() calls)
+
+        Iteration 10 addition: track the last `process_chunk(N, ...)` call argument.
+        When history is pruned, the model's summary now includes "Last incremental
+        chunk_index processed: N" so the model knows which chunk_idx to use next.
+        Without this, the model may re-use the previous chunk_index (confirmed as
+        the cause of Task 3 Turn 3 non-compliance at k=3).
         """
         code_blocks = []
         outputs = []
         variables_mentioned: set[str] = set()
+        last_chunk_idx: int | None = None  # Iteration 10: track last process_chunk() arg
+
+        _PROCESS_CHUNK_RE = re.compile(r"process_chunk\(\s*(\d+)")
 
         for msg in old_messages:
             content = msg.get("content", "")
@@ -284,6 +302,12 @@ class HistoryManager:
                     # Use AST parsing for reliable variable name extraction
                     variables_mentioned |= HistoryManager._extract_assigned_names(code)
                     code_blocks.append(code[:200])  # Truncate long blocks
+
+                    # Iteration 10: extract last process_chunk(N) call argument
+                    # This tells the model what chunk_idx was most recently processed,
+                    # preventing it from reusing a stale chunk_index after pruning.
+                    for m in _PROCESS_CHUNK_RE.finditer(code):
+                        last_chunk_idx = int(m.group(1))
 
                 # Extract REPL output (abbreviated)
                 if "REPL output:" in content:
@@ -303,6 +327,13 @@ class HistoryManager:
         if variables_mentioned:
             summary_parts.append(
                 f"Variables created/modified: {', '.join(sorted(variables_mentioned))}"
+            )
+
+        # Iteration 10: include last chunk_index in summary to prevent stale-index errors
+        if last_chunk_idx is not None:
+            summary_parts.append(
+                f"Last incremental chunk_index processed: {last_chunk_idx} "
+                f"(next turn should process chunk_index {last_chunk_idx + 1})"
             )
 
         if code_blocks:
