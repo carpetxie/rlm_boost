@@ -1,0 +1,86 @@
+{
+  "1": {
+    "task_id": 1,
+    "num_chunks": 5,
+    "incremental": {
+      "pair_checks": 39582,
+      "entity_parses": 464,
+      "retractions": 16415,
+      "final_pairs": 10019,
+      "total_time": 0.021760416915640235,
+      "per_chunk": []
+    },
+    "full_recompute": {
+      "pair_checks": 74414,
+      "entity_parses": 835,
+      "total_time": 0.03191208292264491
+    },
+    "savings": {
+      "pair_check_pct": 46.80839626951918,
+      "entity_parse_pct": 44.431137724550894
+    }
+  },
+  "3": {
+    "task_id": 3,
+    "num_chunks": 5,
+    "incremental": {
+      "pair_checks": 39582,
+      "entity_parses": 464,
+      "retractions": 16415,
+      "final_pairs": 10019,
+      "total_time": 0.02106295805424452,
+      "per_chunk": []
+    },
+    "full_recompute": {
+      "pair_checks": 74414,
+      "entity_parses": 835,
+      "total_time": 0.009367582038976252
+    },
+    "savings": {
+      "pair_check_pct": 46.80839626951918,
+      "entity_parse_pct": 44.431137724550894
+    }
+  },
+  "6": {
+    "task_id": 6,
+    "num_chunks": 5,
+    "incremental": {
+      "pair_checks": 39582,
+      "entity_parses": 464,
+      "retractions": 16415,
+      "final_pairs": 10019,
+      "total_time": 0.0214705818798393,
+      "per_chunk": []
+    },
+    "full_recompute": {
+      "pair_checks": 74414,
+      "entity_parses": 835,
+      "total_time": 0.00805029203183949
+    },
+    "savings": {
+      "pair_check_pct": 46.80839626951918,
+      "entity_parse_pct": 44.431137724550894
+    }
+  },
+  "19": {
+    "task_id": 19,
+    "num_chunks": 5,
+    "incremental": {
+      "pair_checks": 40219,
+      "entity_parses": 464,
+      "retractions": 17258,
+      "final_pairs": 13452,
+      "total_time": 0.024046915932558477,
+      "per_chunk": []
+    },
+    "full_recompute": {
+      "pair_checks": 74414,
+      "entity_parses": 835,
+      "total_time": 0.008045458002015948
+    },
+    "savings": {
+      "pair_check_pct": 45.95237455317548,
+      "entity_parse_pct": 44.431137724550894
+    }
+  }
+}
