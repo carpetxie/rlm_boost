@@ -196,6 +196,7 @@ class IncrementalState:
         self._total_new_entities: int = 0
         self._total_pair_checks: int = 0
         self._total_retractions: int = 0
+        self._processed_chunk_indices: dict[int, dict[str, Any]] = {}  # chunk_index -> cached_stats
 
     def process_chunk(
         self,
@@ -230,10 +231,22 @@ class IncrementalState:
         The theoretical savings claim O(k · n) vs O(n²) holds when u ≪ k.
         For OOLONG-Pairs (N=231, u≈0 per chunk), this is satisfied. For general
         streaming applications, measure u/k before relying on the savings estimate.
-
-        Note: _find_system_end() assumes the first user message is the
-        system-setup boundary. This precondition must hold for correct pruning.
         """
+        # Idempotency guard: if this chunk was already processed, return cached stats.
+        # This converts Failure Mode C (model re-executes process_chunk multiple times
+        # per turn due to max_iterations > 1) from "correct but O(u·n) wasteful per
+        # redundant call" to "correct and O(1) per redundant call".
+        # Re-processing a chunk requires calling reset() first.
+        if chunk_index in self._processed_chunk_indices:
+            import warnings
+
+            warnings.warn(
+                f"process_chunk({chunk_index}) called more than once. "
+                f"Returning cached stats. Re-processing requires reset().",
+                stacklevel=2,
+            )
+            return self._processed_chunk_indices[chunk_index]
+
         existing_ids = self.entity_cache.get_ids()
         updated_ids = set()
         new_ids = set()
@@ -328,6 +341,9 @@ class IncrementalState:
             "total_entities": len(self.entity_cache),
         }
         self.chunk_log.append(stats)
+        # Cache stats for idempotency guard — future calls with same chunk_index
+        # return this cached result instantly (O(1)) without re-executing the sweep.
+        self._processed_chunk_indices[chunk_index] = stats
         return stats
 
     def get_stats(self) -> dict[str, Any]:
