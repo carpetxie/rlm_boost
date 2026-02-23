@@ -1,15 +1,3 @@
-The full verbose output confirms Tasks 3 and 6 are complete with all details matching the committed results. A few additional data points worth noting:
 
-**Task 3 full token breakdown:**
-- Condition A: 47,430 input tokens total; Turn 4 used 6 LM iterations (max) + 39.1s elapsed — the most expensive turn
-- Condition B: 26,123 tokens, 7 LM iterations — surprisingly expensive for a 5K baseline (model thoroughly explored)
-- Condition C (25K oracle): 64 qualifying entities → 2016 pairs, 24,457 tokens, 7 iterations
 
-**Task 6 full token breakdown:**
-- Condition A: 44,659 tokens; iteration counts [5,1,5,3,1] — highly variable, averaging 3 per turn
-- Condition B: 25,360 tokens, 7 LM iterations — same pattern as Task 3
-- Condition C (25K oracle): 60 qualifying entities → 1770 pairs, only 3,907 tokens, 2 iterations — very efficient
-
-**Notable pattern**: Condition B (single-turn 5K baseline) uses 7 LM iterations for Tasks 3 and 6 but only 2 for Task 1. This suggests the model struggles more with the "description/abstract concept" and "location/abbreviation" qualification conditions than "numeric value/location", requiring more REPL exploration before returning FINAL_VAR. This task-specific iteration variance is another dimension of the qualification-time asymmetry story.
-
-All background tasks are now fully resolved. Iteration 11 is definitively complete.
+Condition D Task 3 completed — already captured: 77.2% token savings, F1(A)=F1(D)=F1(C)=0.3237, quality ratio 100%. All 5 background experiments from iteration 16 have now finished successfully, and all results are documented in `docs/research_log.md` and `docs/exchanges/researcher_response.md`.
