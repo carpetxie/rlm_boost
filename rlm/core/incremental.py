@@ -237,6 +237,8 @@ class IncrementalState:
         self._total_new_entities: int = 0
         self._total_pair_checks: int = 0
         self._total_retractions: int = 0
+        self._noop_retractions: int = 0       # retracted then immediately re-added (no-op)
+        self._permanent_retractions: int = 0  # retracted and NOT re-added (genuine invalidation)
         self._processed_chunk_indices: dict[int, dict[str, Any]] = {}  # chunk_index -> cached_stats
 
     def process_chunk(
@@ -244,6 +246,7 @@ class IncrementalState:
         chunk_index: int,
         new_entities: dict[str, dict[str, Any]],
         pair_checker: Any = None,
+        monotone_attrs: set[str] | None = None,
     ) -> dict[str, Any]:
         """Process a new chunk of entities incrementally.
 
@@ -251,9 +254,26 @@ class IncrementalState:
             chunk_index: Index of the arriving chunk
             new_entities: {entity_id: attributes} for entities in the new chunk
             pair_checker: Optional callable(attrs1, attrs2) -> bool for pair validation
+            monotone_attrs: Optional set of attribute names that are monotone increasing.
+                For these attributes, once an entity has a truthy value in any prior chunk,
+                that value is preserved even if the current chunk's data would downgrade it
+                (e.g., "qualifying=True" from chunk 0 is preserved when the entity appears
+                in chunk 3 with only non-qualifying labels).
+
+                Optimization: if ALL monotone_attrs values are unchanged after merging
+                (the entity's effective state is identical to what was cached), the entity
+                is NOT added to updated_ids. This skips the O(degree) retraction +
+                O(n) updated-entity sweep for that entity — eliminating no-op retraction
+                cycles at zero correctness cost.
+
+                Use monotone_attrs for "at least one qualifying label" predicate types
+                (existential predicates). Do NOT use for "exactly N" or cardinality-
+                constrained predicates, which are genuinely non-monotone.
 
         Returns:
-            Dict with processing stats for this chunk
+            Dict with processing stats for this chunk, including:
+                - noop_retractions: pairs retracted then immediately re-added (no cost savings)
+                - permanent_retractions: pairs retracted and not re-added (genuine invalidations)
 
         Complexity: O((k + u) · n) per chunk, where:
             k = number of new entities in this chunk
@@ -272,6 +292,12 @@ class IncrementalState:
         The theoretical savings claim O(k · n) vs O(n²) holds when u ≪ k.
         For OOLONG-Pairs (N=231, u≈0 per chunk), this is satisfied. For general
         streaming applications, measure u/k before relying on the savings estimate.
+
+        With monotone_attrs: the updated-entity sweep is additionally suppressed for
+        entities whose effective (pair-checker-relevant) state is unchanged after the
+        monotone merge. This brings the amortized cost closer to O(k · n) even when
+        entities reappear across chunks, provided the monotone attributes dominate the
+        pair-checker condition.
         """
         # Idempotency guard: if this chunk was already processed, return cached stats.
         # This converts Failure Mode C (model re-executes process_chunk multiple times
@@ -292,11 +318,44 @@ class IncrementalState:
         updated_ids = set()
         new_ids = set()
 
-        # 1. Add/update entities
+        # 1. Add/update entities, with optional monotone attribute merge.
+        #
+        # Monotone merge logic (when monotone_attrs is provided):
+        # For each entity that already exists in the cache (is an update), read the
+        # cached attribute values BEFORE writing. For each attribute in monotone_attrs:
+        #   - If old_val is truthy AND new_val is falsy → preserve old_val in attrs.
+        #     (The cached truthy value is retained; the current chunk's downgrade is ignored.)
+        # After merging: if ALL monotone_attrs values are unchanged (boolean-equivalent),
+        # mark the entity as a no-op update and skip adding it to updated_ids.
+        # This eliminates O(degree) retraction + O(n) updated-entity sweep for that entity.
         for eid, attrs in new_entities.items():
+            is_noop_update = False  # True only for updates where effective state is unchanged
+
+            if monotone_attrs:
+                cached_attrs = self.entity_cache.get(eid)  # read BEFORE updating
+                if cached_attrs is not None:  # entity exists → will be an update
+                    monotone_all_same = True
+                    for attr in monotone_attrs:
+                        old_val = cached_attrs.get(attr)
+                        new_val = attrs.get(attr)
+                        if old_val and not new_val:
+                            # Monotone merge: preserve cached truthy value
+                            attrs[attr] = old_val
+                            # After merge, attrs[attr] == old_val → boolean-unchanged
+                        elif bool(new_val) != bool(old_val):
+                            # Genuine change in this monotone attribute
+                            monotone_all_same = False
+                    if monotone_all_same:
+                        # All monotone attributes are unchanged after merge.
+                        # This entity's effective state (for pair checking) is the same
+                        # as it was in the cache → no retraction needed.
+                        is_noop_update = True
+
             was_update = self.entity_cache.add(eid, attrs, chunk_index)
             if was_update:
-                updated_ids.add(eid)
+                if not is_noop_update:
+                    updated_ids.add(eid)
+                # else: skip retraction for this entity (no-op update)
             else:
                 new_ids.add(eid)
 
@@ -312,6 +371,8 @@ class IncrementalState:
         # 3. Check pairs incrementally (if checker provided)
         new_pairs = 0
         pair_checks = 0
+        chunk_noop_retractions = 0
+        chunk_permanent_retractions = 0
         if pair_checker:
             # New × existing (excluding other new entities)
             for new_id in new_ids:
@@ -334,7 +395,11 @@ class IncrementalState:
                         self.pair_tracker.add_pair(id1, id2)
                         new_pairs += 1
 
-            # Re-evaluate retracted pairs
+            # Re-evaluate retracted pairs — distinguishing no-op from permanent retractions.
+            # A "no-op retraction" is one where the pair is immediately re-added after
+            # re-evaluation (the attribute change did not affect pair validity).
+            # A "permanent retraction" is one where the pair is NOT re-added (genuinely
+            # invalidated by the new entity state).
             for p in retracted_pairs:
                 attrs1 = self.entity_cache.get(p[0])
                 attrs2 = self.entity_cache.get(p[1])
@@ -343,6 +408,14 @@ class IncrementalState:
                     if pair_checker(attrs1, attrs2):
                         self.pair_tracker.add_pair(p[0], p[1])
                         new_pairs += 1
+                        chunk_noop_retractions += 1
+                    else:
+                        chunk_permanent_retractions += 1
+                else:
+                    # One entity missing from cache (should not happen in normal operation)
+                    chunk_permanent_retractions += 1
+            self._noop_retractions += chunk_noop_retractions
+            self._permanent_retractions += chunk_permanent_retractions
 
             # For updated entities, also check against ALL other entities
             # (not just retracted pairs) — the new classification may create
@@ -389,6 +462,8 @@ class IncrementalState:
             "pair_checks": pair_checks,
             "new_pairs": new_pairs,
             "retracted_pairs": len(retracted_pairs),
+            "noop_retractions": chunk_noop_retractions if pair_checker else 0,
+            "permanent_retractions": chunk_permanent_retractions if pair_checker else 0,
             "total_pairs": len(self.pair_tracker),
             "total_entities": len(self.entity_cache),
         }
@@ -399,13 +474,32 @@ class IncrementalState:
         return stats
 
     def get_stats(self) -> dict[str, Any]:
-        """Get cumulative statistics."""
+        """Get cumulative statistics.
+
+        Retraction breakdown:
+        - total_retractions: all retraction events (PairTracker.retraction_count)
+        - noop_retractions: pairs retracted then immediately re-added (effective no-ops;
+          the entity's attribute change did not affect pair validity)
+        - permanent_retractions: pairs retracted and NOT re-added (genuine invalidations
+          where the entity's new state fails the pair_checker condition)
+
+        Note: total_retractions ≈ noop_retractions + permanent_retractions when a
+        pair_checker is provided. Without a pair_checker, noop/permanent counters stay 0
+        since re-evaluation is skipped.
+
+        For V3 monotone_attrs runs: expect noop_retractions >> permanent_retractions
+        (monotone merge preserves qualifying=True → pairs re-added immediately).
+        For V2 runs (no monotone fix): permanent_retractions > 0 (entities downgraded →
+        pairs not re-added → missing from final results).
+        """
         return {
             "total_entities": len(self.entity_cache),
             "total_pairs": len(self.pair_tracker),
             "total_new_entities_processed": self._total_new_entities,
             "total_pair_checks": self._total_pair_checks,
             "total_retractions": self._total_retractions,
+            "noop_retractions": self._noop_retractions,
+            "permanent_retractions": self._permanent_retractions,
             "chunks_processed": len(self.chunk_log),
         }
 
@@ -427,6 +521,8 @@ class IncrementalState:
         self._total_new_entities = 0
         self._total_pair_checks = 0
         self._total_retractions = 0
+        self._noop_retractions = 0
+        self._permanent_retractions = 0
         self._processed_chunk_indices = {}
 
     def __repr__(self) -> str:
