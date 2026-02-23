@@ -769,6 +769,219 @@ def run_k_sensitivity_sweep_v4(
 
 
 # ---------------------------------------------------------------------------
+# Condition D: Full-Recompute RLM (same framework, reset each turn)
+# ---------------------------------------------------------------------------
+
+CHUNK_PROMPT_FULL_RECOMPUTE_V4 = """Task (OOLONG-Pairs Task {task_idx}): Find pairs where BOTH users have at least one
+instance labeled {label_desc}. This is Turn {chunk_num} of {total_chunks}.
+
+Context format: "Date: [date] || User: [user_id] || Instance: [text] || Label: [cat]"
+Entity ID = the numeric user_id (e.g. "44436"). Parse the Label field directly.
+
+IMPORTANT: This is a FULL RECOMPUTE turn. You must reset state and re-process ALL chunks.
+
+Run this code EXACTLY as shown (chunk index {chunk_idx}):
+
+```repl
+import re
+_incremental.reset()
+qualifying_labels = {qualifying_labels_repr}
+{unrolled_chunk_code}
+pair_results = list(_incremental.pair_tracker.get_pairs())
+print(f"Turn {chunk_num}: Full recompute -> {{len(pair_results)}} pairs from {{_incremental.get_stats()['chunks_processed']}} chunks")
+```
+
+IMPORTANT: Run the code block above EXACTLY. Do NOT modify it. Call `_incremental.reset()` first,
+then process ALL chunks from context_0 through context_{last_chunk_idx}.
+
+After the repl block runs successfully, return FINAL_VAR(pair_results).
+Do NOT skip the reset() call. Do NOT skip any chunks.
+"""
+
+
+def run_condition_d_full_recompute(
+    labeled_context: str,
+    gold_pairs: set,
+    api_key: str,
+    task_idx: int = 1,
+    num_chunks: int = 5,
+    max_chunk_chars: int = 5000,
+    model: str = "gpt-4o-mini",
+    verbose: bool = False,
+) -> dict:
+    """
+    Condition D: Full-Recompute RLM using IncrementalState.
+
+    Uses the SAME IncrementalState framework as Condition A, but at each turn:
+    1. Calls _incremental.reset() to clear all state
+    2. Reprocesses ALL chunks from 0..current_turn
+
+    This isolates the EFFICIENCY advantage of incremental processing:
+    - Both A and D use IncrementalState for structured computation
+    - A processes only the new chunk each turn (incremental)
+    - D processes ALL accumulated chunks each turn (full recompute)
+
+    Expected: F1(D) ≈ F1(oracle_C) ≈ 0.3424 (sees all context each turn)
+    Expected: tokens(D) >> tokens(A) (re-reads all prior chunks)
+
+    The comparison A vs D is the paper's cleanest efficiency metric:
+    "Same framework, same correctness guarantees, X% fewer tokens."
+    """
+    from rlm.core.rlm import RLM
+    from rlm.utils.prompts import INCREMENTAL_SYSTEM_PROMPT
+
+    os.environ["OPENAI_API_KEY"] = api_key
+
+    checker_setup = make_label_checker_setup(task_idx)
+    qualifying_labels = TASK_QUALIFYING_LABELS[task_idx]
+    label_desc = TASK_LABEL_DESCRIPTION[task_idx]
+
+    print(f"\n{'=' * 70}")
+    print(f"CONDITION D: Full-Recompute RLM (IncrementalState + reset each turn)")
+    print(f"  Task {task_idx} | k={num_chunks}, {max_chunk_chars} chars/chunk")
+    print(f"  Qualifying: {label_desc}")
+    print(f"  Strategy: reset() + process_chunk(0..t) at each turn t")
+    print(f"  Expected: F1 ≈ oracle (0.3424), tokens >> incremental")
+    print(f"{'=' * 70}")
+
+    chunks = _make_sequential_chunks(labeled_context, num_chunks, max_chunk_chars)
+    print(f"Sequential chunk sizes: {[len(c) for c in chunks]} chars")
+
+    rlm = RLM(
+        backend="openai",
+        backend_kwargs={"model_name": model},
+        environment="local",
+        environment_kwargs={"setup_code": checker_setup},
+        persistent=True,
+        custom_system_prompt=INCREMENTAL_SYSTEM_PROMPT,
+        max_iterations=8,  # higher limit: reprocessing all chunks takes more iterations
+        verbose=verbose,
+    )
+
+    f1_progression = []
+    turn_tokens = []
+    total_wall_clock = 0.0
+
+    for chunk_i, chunk in enumerate(chunks):
+        chunk_num = chunk_i + 1
+        # Generate unrolled chunk processing code (no loop, no globals())
+        unrolled_lines = []
+        for ci in range(chunk_num):
+            unrolled_lines.append(f"# Process chunk {ci}")
+            unrolled_lines.append(f"entities_{ci} = {{}}")
+            unrolled_lines.append(f"for line in context_{ci}.split('\\n'):")
+            unrolled_lines.append(f"    m = re.search(r'User: (\\d+).*?\\|\\| Label: (.+?)$', line)")
+            unrolled_lines.append(f"    if m:")
+            unrolled_lines.append(f"        uid = m.group(1)")
+            unrolled_lines.append(f"        label = m.group(2).strip().lower()")
+            unrolled_lines.append(f"        if uid not in entities_{ci}:")
+            unrolled_lines.append(f"            entities_{ci}[uid] = {{\"labels\": [], \"qualifying\": False}}")
+            unrolled_lines.append(f"        entities_{ci}[uid][\"labels\"].append(label)")
+            unrolled_lines.append(f"        if label in qualifying_labels:")
+            unrolled_lines.append(f"            entities_{ci}[uid][\"qualifying\"] = True")
+            unrolled_lines.append(f"stats_{ci} = _incremental.process_chunk({ci}, entities_{ci}, pair_checker=check_pair, monotone_attrs={{\"qualifying\"}})")
+            unrolled_lines.append(f"print(f\"  Chunk {ci}: {{stats_{ci}['new_entities']}} new, {{stats_{ci}['total_pairs']}} pairs\")")
+        unrolled_chunk_code = "\n".join(unrolled_lines)
+
+        root_prompt = CHUNK_PROMPT_FULL_RECOMPUTE_V4.format(
+            task_idx=task_idx,
+            label_desc=label_desc,
+            chunk_num=chunk_num,
+            total_chunks=num_chunks,
+            chunk_idx=chunk_i,
+            last_chunk_idx=chunk_i,
+            qualifying_labels_repr=repr(qualifying_labels),
+            unrolled_chunk_code=unrolled_chunk_code,
+        )
+
+        print(f"\n  --- Turn {chunk_num}/{num_chunks} (recompute chunks 0..{chunk_i}) ---")
+        t0 = time.perf_counter()
+        completion = rlm.completion(chunk, root_prompt=root_prompt)
+        elapsed = time.perf_counter() - t0
+        total_wall_clock += elapsed
+
+        env = rlm._persistent_env
+        incr = env.locals.get("_incremental") if env and hasattr(env, "locals") else None
+
+        direct_pairs = []
+        chunks_processed = 0
+        pair_checks_total = 0
+
+        if incr:
+            stats = incr.get_stats()
+            chunks_processed = stats.get("chunks_processed", 0)
+            pair_checks_total = stats.get("total_pair_checks", 0)
+            direct_pairs = list(incr.pair_tracker.get_pairs())
+
+        iteration_count = _extract_iteration_count(completion.usage_summary)
+        f1_result = compute_f1(direct_pairs, gold_pairs)
+        input_tokens, output_tokens = _extract_tokens(completion.usage_summary)
+        turn_tokens.append({"turn": chunk_num, "input": input_tokens, "output": output_tokens})
+
+        # Check if reset+replay happened correctly: chunks_processed should be chunk_num
+        replay_correct = (chunks_processed == chunk_num)
+
+        print(f"    chunks_processed: {chunks_processed} (expected {chunk_num}, correct={replay_correct})")
+        print(f"    pairs: {len(direct_pairs)}  pair_checks: {pair_checks_total}")
+        print(f"    F1={f1_result['f1']}  P={f1_result['precision']}  R={f1_result['recall']}")
+        print(f"    input_tokens: {input_tokens}  output_tokens: {output_tokens}  elapsed: {elapsed:.1f}s")
+        print(f"    iteration_count: {iteration_count}")
+
+        f1_progression.append({
+            "chunk": chunk_num,
+            "chunk_idx": chunk_i,
+            "replay_correct": replay_correct,
+            "chunks_processed": chunks_processed,
+            "pairs": len(direct_pairs),
+            "pair_checks_total": pair_checks_total,
+            "f1": f1_result["f1"],
+            "precision": f1_result["precision"],
+            "recall": f1_result["recall"],
+            "tp": f1_result.get("tp"),
+            "fp": f1_result.get("fp"),
+            "fn": f1_result.get("fn"),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "elapsed_sec": round(elapsed, 2),
+            "iteration_count": iteration_count,
+        })
+
+    rlm.close()
+
+    total_input = sum(t["input"] for t in turn_tokens)
+    total_output = sum(t["output"] for t in turn_tokens)
+    replay_correct_turns = sum(1 for t in f1_progression if t["replay_correct"])
+
+    print(f"\n  Condition D Summary (Task {task_idx}, k={num_chunks}):")
+    print(f"    Replay correct: {replay_correct_turns}/{num_chunks} turns")
+    print(f"    F1 progression: {[round(t['f1'], 4) for t in f1_progression]}")
+    print(f"    Final F1={f1_progression[-1]['f1'] if f1_progression else None}")
+    print(f"    Total input tokens: {total_input}  Total output tokens: {total_output}")
+    print(f"    Total wall-clock: {total_wall_clock:.1f}s")
+
+    return {
+        "condition": "D_full_recompute_with_incremental_state",
+        "version": 4,
+        "task_idx": task_idx,
+        "model": model,
+        "num_chunks": num_chunks,
+        "max_chunk_chars": max_chunk_chars,
+        "context_type": "labeled_sequential",
+        "strategy": "reset_and_replay_all_chunks_each_turn",
+        "qualifying_labels": list(qualifying_labels),
+        "replay_correct_turns": replay_correct_turns,
+        "f1_progression": f1_progression,
+        "final_f1": f1_progression[-1]["f1"] if f1_progression else None,
+        "final_precision": f1_progression[-1]["precision"] if f1_progression else None,
+        "final_recall": f1_progression[-1]["recall"] if f1_progression else None,
+        "total_input_tokens": total_input,
+        "total_output_tokens": total_output,
+        "total_wall_clock_sec": round(total_wall_clock, 2),
+        "per_turn_tokens": turn_tokens,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -788,6 +1001,8 @@ def main():
     parser.add_argument("--multi-run", type=int, default=0, metavar="N",
                         help="Run Task 1 N times for stability analysis")
     parser.add_argument("--condition-b", action="store_true", help="Run Condition B V4")
+    parser.add_argument("--condition-d", action="store_true",
+                        help="Full-Recompute RLM (reset+replay all chunks each turn)")
     parser.add_argument("--model", default="gpt-4o-mini")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--output-dir", default="results/streaming",
@@ -815,6 +1030,8 @@ def main():
 
     if args.multi_run > 0:
         # Multi-run stability analysis
+        # Use consistent total_chars=25000 window, dividing by k for chars/chunk
+        multi_run_chunk_chars = 25000 // args.k
         gold_pairs = compute_gold_pairs(labeled_context, task_idx=1)
         result = run_multi_run_stability(
             labeled_context=labeled_context,
@@ -823,10 +1040,11 @@ def main():
             task_idx=1,
             num_runs=args.multi_run,
             num_chunks=args.k,
+            max_chunk_chars=multi_run_chunk_chars,
             model=args.model,
             verbose=args.verbose,
         )
-        out_path = output_dir / f"label_aware_task1_v4_multi_run_{args.multi_run}.json"
+        out_path = output_dir / f"label_aware_task1_v4_multi_run_{args.multi_run}_k{args.k}.json"
         out_path.write_text(json.dumps(result, indent=2))
         print(f"\nSaved to {out_path}")
 
@@ -862,6 +1080,81 @@ def main():
         )
         out_path = output_dir / f"label_aware_task{task_idx}_v4_non_monotone.json"
         out_path.write_text(json.dumps(result, indent=2))
+        print(f"\nSaved to {out_path}")
+
+    elif args.condition_d:
+        # Condition D: Full-Recompute RLM (reset+replay all chunks each turn)
+        task_idx = args.task
+        gold_pairs = compute_gold_pairs(labeled_context, task_idx=task_idx)
+        result_d = run_condition_d_full_recompute(
+            labeled_context=labeled_context,
+            gold_pairs=gold_pairs,
+            api_key=api_key,
+            task_idx=task_idx,
+            num_chunks=args.k,
+            max_chunk_chars=25000 // args.k,
+            model=args.model,
+            verbose=args.verbose,
+        )
+        # Also run Condition A for direct comparison
+        result_a = run_condition_a_v4(
+            labeled_context=labeled_context,
+            gold_pairs=gold_pairs,
+            api_key=api_key,
+            task_idx=task_idx,
+            num_chunks=args.k,
+            max_chunk_chars=25000 // args.k,
+            model=args.model,
+            verbose=args.verbose,
+        )
+        # Also run Condition C (oracle) for reference
+        result_c = run_condition_c_v2(
+            labeled_context=labeled_context,
+            gold_pairs=gold_pairs,
+            api_key=api_key,
+            task_idx=task_idx,
+            max_chars=25000,
+            model=args.model,
+            verbose=args.verbose,
+        )
+
+        f1_d = result_d.get("final_f1", 0) or 0
+        f1_a = result_a.get("final_f1", 0) or 0
+        f1_c = result_c.get("f1", 0) or 0
+        tok_d = result_d.get("total_input_tokens", 0)
+        tok_a = result_a.get("total_input_tokens", 0)
+        tok_c = result_c.get("input_tokens", 0)
+        wall_d = result_d.get("total_wall_clock_sec", 0)
+
+        print(f"\n{'=' * 80}")
+        print(f"CONDITION D vs A vs C — Task {task_idx}, k={args.k}")
+        print(f"{'=' * 80}")
+        print(f"{'':>30} {'D (Recompute)':>16} {'A (Incremental)':>16} {'C (Oracle)':>12}")
+        print(f"{'-' * 74}")
+        print(f"{'F1':>30} {f1_d:>16.4f} {f1_a:>16.4f} {f1_c:>12.4f}")
+        print(f"{'Input tokens':>30} {tok_d:>16,} {tok_a:>16,} {tok_c:>12,}")
+        print(f"{'Token ratio vs C':>30} {tok_d/tok_c if tok_c else 0:>16.2f}× {tok_a/tok_c if tok_c else 0:>16.2f}× {'1.00×':>12}")
+        if tok_d > 0:
+            savings_a_vs_d = 1.0 - tok_a / tok_d
+            print(f"{'A savings vs D':>30} {'':>16} {savings_a_vs_d:>15.1%} {'':>12}")
+        if f1_d > 0:
+            print(f"{'A/D ratio (quality)':>30} {'':>16} {f1_a/f1_d:>15.1%} {'':>12}")
+
+        combined = {
+            "task_idx": task_idx,
+            "num_chunks": args.k,
+            "condition_d": result_d,
+            "condition_a": result_a,
+            "condition_c": result_c,
+            "comparison": {
+                "f1_d": f1_d, "f1_a": f1_a, "f1_c": f1_c,
+                "tokens_d": tok_d, "tokens_a": tok_a, "tokens_c": tok_c,
+                "token_savings_a_vs_d": round(1.0 - tok_a / tok_d, 4) if tok_d > 0 else None,
+                "quality_ratio_a_over_d": round(f1_a / f1_d, 4) if f1_d > 0 else None,
+            },
+        }
+        out_path = output_dir / f"condition_d_vs_a_task{task_idx}_k{args.k}.json"
+        out_path.write_text(json.dumps(combined, indent=2))
         print(f"\nSaved to {out_path}")
 
     elif args.condition_b:
