@@ -1,25 +1,15 @@
-The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of what Iteration 12 covers:
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
 
----
+## Critique — Iteration 14 Summary
 
-## Critique Summary — Iteration 12
+**Overall**: The research has reached a genuine inflection point with 5-run stability (F1=0.322±0.004, P=1.0, 100% compliance), the naive-vs-incremental head-to-head with real API numbers, and validated at-risk fraction predictions. The paper skeleton is present.
 
-**Scores:** Novelty 7/10 (+0), Technical Soundness 7/10 (+1), Benchmark Performance 7/10 (+1), Scalability 6/10 (+0), Research Maturity 7/10 (+0)
+**Scores**: Novelty 7/10 (hold), Technical Soundness 8/10 (+1), Benchmark Performance 8/10 (hold), Scalability 6/10 (+1), Research Maturity 7/10 (+1).
 
-### Central New Finding: Attribute-Overwriting Bug
+**The #1 blocking issue**: Table 2 (Naive vs Incremental) is a **structurally unfair comparison** — the naive arm lacks IncrementalState entirely (F1=0), so it conflates the structural benefit (having a framework) with the efficiency benefit (being incremental). A "Full-Recompute RLM" arm using the same IncrementalState but resetting each turn is needed. This is ~20 lines of code.
 
-The most critical issue identified is a **correctness bug in the REPL template code** (`CHUNK_PROMPT_LABEL_AWARE_V2`) that directly undermines the paper's architectural claim about "qualification-time asymmetry":
-
-The `entities` dict is rebuilt from scratch each chunk. When user X was qualifying in chunk 0 but reappears in chunk 2 with only non-qualifying labels, the REPL sets `entities[X] = {qualifying: False}` and `EntityCache.add()` **overwrites** X's qualifying=True with qualifying=False — triggering incorrect retractions and losing X's pairs permanently.
-
-For "at least one" tasks (Tasks 1, 3, 6), once qualifying, always qualifying. The fix is 2 lines. **This bug may explain much of the 663 missing pairs (40.1% gap from oracle ceiling)**, making the "qualification-time asymmetry" framing potentially incorrect.
-
-### The One Big Thing
-
-**Run the attribute-overwriting ablation (~$3, 2 hours) before implementing lazy evaluation.** If A/C ratio increases toward 90%+, the paper's headline claim strengthens dramatically and the architectural narrative changes. If A/C is unchanged at ~64%, the asymmetry framing is confirmed and lazy eval is the right next step. Either outcome is publishable — but don't spend money on lazy eval before knowing which world you're in.
-
-### Other Key Points
-- **Token cost transparency**: Condition A uses 14% *more* LLM tokens than oracle C — this must be stated clearly; don't claim token savings
-- **Task 6 A/C gap (55.5% vs 64%)**: unexplained 9pp difference, needs a per-chunk qualifying entity distribution analysis
-- **k-sensitivity** (researcher's proposed priority 2): endorsed, but run after the ablation
-- **5 code issues** identified, including double-counting in `updated × all` sweep and wrong system prompt for Condition B
+**Other key actions**:
+- k=3 stability (3 more runs) — the paper's strongest number needs robustness
+- `paper_summary_tables.py` uses outlier-run values instead of 5-run means
+- Monotone optimization safety invariant needs a docstring warning
+- Outlier diagnosis (55 missing pairs) is zero-cost and adds a diagnostic paragraph
