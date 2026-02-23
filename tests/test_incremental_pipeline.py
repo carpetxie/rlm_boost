@@ -197,6 +197,180 @@ class TestIncrementalState:
 
 
 # =============================================================================
+# Monotone Attribute Tests (Iteration 13 — library-level monotone_attrs)
+# =============================================================================
+
+
+class TestMonotoneAttrs:
+    """Tests for the monotone_attrs parameter of IncrementalState.process_chunk().
+
+    These tests validate the four behaviors mandated by the Iteration 13 critique:
+    (a) Monotone attr preserved on downgrade (truthy old + falsy new → keep old)
+    (b) Retraction skipped when ONLY monotone attrs change (and they don't actually change)
+    (c) Retraction fires when non-monotone attrs change
+    (d) monotone_attrs=None preserves existing behavior exactly
+    """
+
+    def _qualifying_checker(self, a, b):
+        """Check pair: both must have qualifying=True."""
+        return a.get("qualifying", False) and b.get("qualifying", False)
+
+    def test_monotone_attr_preserved_on_downgrade(self):
+        """(a) Once an entity qualifies, it stays qualifying even if later chunk
+        provides only non-qualifying labels.
+
+        Without monotone_attrs: entity downgraded → pairs permanently lost.
+        With monotone_attrs={"qualifying"}: cached True preserved → pairs re-added.
+        """
+        state = IncrementalState()
+
+        # Chunk 0: u1 qualifies, u2 qualifies → pair (u1, u2) added
+        state.process_chunk(
+            0,
+            {"u1": {"qualifying": True}, "u2": {"qualifying": True}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs={"qualifying"},
+        )
+        assert len(state.pair_tracker) == 1
+        assert ("u1", "u2") in state.pair_tracker.get_pairs()
+
+        # Chunk 1: u1 reappears with qualifying=False (non-qualifying labels in this chunk).
+        # With monotone merge: u1's qualifying should be preserved as True.
+        stats = state.process_chunk(
+            1,
+            {"u1": {"qualifying": False}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs={"qualifying"},
+        )
+
+        # u1's effective state is unchanged (qualifying still True after merge)
+        # → no retraction should occur, pair (u1, u2) should persist
+        assert stats["updated_entities"] == 0, (
+            "u1 should be a no-op update (effective state unchanged via monotone merge)"
+        )
+        assert stats["retracted_pairs"] == 0, "No retraction: u1's qualifying preserved as True"
+        assert len(state.pair_tracker) == 1, "Pair (u1, u2) must persist"
+        # Verify the cached value is True (monotone merge worked)
+        assert state.entity_cache.get("u1")["qualifying"] is True
+
+    def test_retraction_skipped_for_monotone_only_noop_change(self):
+        """(b) When ONLY monotone attrs change but they stay truthy, retraction is skipped.
+
+        This is the key optimization: eliminates O(degree × n) retraction cost for
+        entities that reappear with only monotone attribute updates that preserve
+        their effective classification.
+        """
+        state = IncrementalState()
+
+        # Chunk 0: 3 qualifying entities → 3 pairs
+        state.process_chunk(
+            0,
+            {"u1": {"qualifying": True}, "u2": {"qualifying": True}, "u3": {"qualifying": True}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs={"qualifying"},
+        )
+        assert len(state.pair_tracker) == 3  # C(3,2) = 3
+
+        # Chunk 1: u1 reappears with qualifying=False → monotone merge preserves True
+        # Since qualifying is the only (monotone) attr and it's unchanged → no-op update
+        # → u1 NOT in updated_ids → retract_entity(u1) NOT called → 0 retractions
+        stats = state.process_chunk(
+            1,
+            {"u1": {"qualifying": False}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs={"qualifying"},
+        )
+
+        assert stats["updated_entities"] == 0, "No effective update (monotone merge → no-op)"
+        assert stats["retracted_pairs"] == 0, "No retraction for no-op update"
+        assert len(state.pair_tracker) == 3, "All 3 pairs intact (no retraction)"
+        # All retractions are 0 in cumulative stats too
+        cumulative = state.get_stats()
+        assert cumulative["total_retractions"] == 0
+        assert cumulative["noop_retractions"] == 0
+        assert cumulative["permanent_retractions"] == 0
+
+    def test_retraction_fires_when_monotone_attr_genuinely_improves(self):
+        """(c) Retraction fires when a monotone attr genuinely IMPROVES (False→True).
+
+        The no-op suppression only applies when cached=truthy AND new=falsy (merge preserves).
+        If the entity was NOT qualifying before and NOW qualifies (False→True), this is a
+        real state change — the entity may now form new pairs. So u1 IS added to updated_ids
+        → retract_entity(u1) fires → new pairs found via updated×all sweep.
+
+        API contract: monotone_attrs controls BOTH (1) the merge logic (preserve truthy old
+        values) AND (2) the no-op skip decision (unchanged after merge → skip). Non-monotone
+        attrs (e.g. raw labels list) are allowed to change without affecting the no-op test,
+        because the pair_checker's correctness only depends on the declared monotone attrs.
+        Callers must only declare attrs that the pair_checker uses as monotone_attrs.
+        """
+        state = IncrementalState()
+
+        # Chunk 0: u1 not qualifying, u2 qualifying → no pair (u1 must also qualify)
+        state.process_chunk(
+            0,
+            {"u1": {"qualifying": False}, "u2": {"qualifying": True}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs={"qualifying"},
+        )
+        assert len(state.pair_tracker) == 0  # u1 doesn't qualify → no pair
+
+        # Chunk 1: u1 reappears with qualifying=True (genuine improvement: False→True)
+        # old_val=False, new_val=True → NOT the merge case (merge only fires for True→False)
+        # → monotone_all_same=False (bool(True) != bool(False)) → u1 in updated_ids
+        # → retract_entity(u1) fires (0 pairs to retract) → updated×all sweep
+        # → check (u1, u2): both qualifying=True → pair added
+        stats = state.process_chunk(
+            1,
+            {"u1": {"qualifying": True}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs={"qualifying"},
+        )
+
+        assert stats["updated_entities"] == 1, (
+            "u1 genuinely improved (False→True) → real update, retraction fires"
+        )
+        assert len(state.pair_tracker) == 1, "Pair (u1, u2) found via updated×all sweep"
+        pairs = state.pair_tracker.get_pairs()
+        assert ("u1", "u2") in pairs
+
+    def test_none_monotone_attrs_preserves_existing_behavior(self):
+        """(d) monotone_attrs=None must produce identical behavior to the original
+        process_chunk() signature (backward compatibility).
+
+        Without monotone_attrs: a qualifying entity that reappears with qualifying=False
+        is downgraded → pairs permanently retracted (old V2 bug behavior).
+        """
+        state = IncrementalState()
+
+        # Chunk 0: u1 qualifies, u2 qualifies → pair (u1, u2)
+        state.process_chunk(
+            0,
+            {"u1": {"qualifying": True}, "u2": {"qualifying": True}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs=None,  # explicit None — should behave like pre-Iter13 code
+        )
+        assert len(state.pair_tracker) == 1
+
+        # Chunk 1: u1 reappears with qualifying=False (no monotone merge without monotone_attrs)
+        # → u1 downgraded in EntityCache → retract_entity(u1) fires
+        # → re-evaluate: u1.qualifying=False → pair NOT re-added (permanent retraction)
+        stats = state.process_chunk(
+            1,
+            {"u1": {"qualifying": False}},
+            pair_checker=self._qualifying_checker,
+            monotone_attrs=None,
+        )
+
+        assert stats["updated_entities"] == 1, "u1 is a real update (no monotone merge)"
+        assert stats["retracted_pairs"] == 1, "Pair (u1, u2) retracted"
+        assert len(state.pair_tracker) == 0, "Pair not re-added (u1 downgraded)"
+        cumulative = state.get_stats()
+        assert cumulative["permanent_retractions"] == 1
+        assert cumulative["noop_retractions"] == 0
+
+
+# =============================================================================
 # HistoryManager Tests
 # =============================================================================
 
