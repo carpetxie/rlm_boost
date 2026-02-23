@@ -320,6 +320,14 @@ class IncrementalState:
 
         # 1. Add/update entities, with optional monotone attribute merge.
         #
+        # SAFETY INVARIANT: When monotone_attrs is provided, pair_checker must depend
+        # exclusively on the declared monotone attributes. If pair_checker reads other
+        # entity attributes, set monotone_attrs=None to preserve correct retraction.
+        # Rationale: The no-op update optimization (below) skips retraction when only
+        # monotone attrs are present and unchanged. If pair_checker depends on a
+        # non-monotone attr that changed, the optimization silently skips a necessary
+        # retraction, producing incorrect pair results.
+        #
         # Monotone merge logic (when monotone_attrs is provided):
         # For each entity that already exists in the cache (is an update), read the
         # cached attribute values BEFORE writing. For each attribute in monotone_attrs:
