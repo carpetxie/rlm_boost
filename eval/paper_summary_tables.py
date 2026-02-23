@@ -192,6 +192,38 @@ def table_4_k_sensitivity():
     print("At k≥7, compliance degrades (86-90%) due to smaller per-chunk contexts.")
 
 
+def table_2c_cross_task_efficiency():
+    """Cross-task Condition D efficiency comparison (Iteration 16).
+
+    Shows that the ~77-86% token savings generalize across tasks, not just Task 1.
+    """
+    print("\n" + "=" * 100)
+    print("TABLE 2c: Cross-Task Efficiency — Condition D vs A (k=5, gpt-4o-mini)")
+    print("          All use IncrementalState + monotone_attrs={'qualifying'}")
+    print("=" * 100)
+
+    print(f"\n{'Task':<8} {'F1(D)':>8} {'F1(A)':>8} {'F1(C)':>8} {'Tok(D)':>10} {'Tok(A)':>10} {'Tok(C)':>10} {'A/D Sav':>8} {'A/D Qual':>9}")
+    print("-" * 90)
+
+    # Data from Iteration 15 + 16 experiments
+    rows = [
+        # Task 1: 2 D runs, report both
+        ("T1 R1", 0.3228, 0.3228, 0.3424, 246220, 49848, 24674, "79.8%", "100.0%"),
+        ("T1 R2", 0.3228, 0.3228, 0.3424, 80319, 18411, 24720, "77.1%", "100.0%"),
+        # Task 3
+        ("T3", 0.3237, 0.3237, 0.3237, 210902, 48144, 24357, "77.2%", "100.0%"),
+        # Task 6
+        ("T6", 0.3314, 0.3314, 0.3314, 125054, 17354, 26964, "86.1%", "100.0%"),
+    ]
+    for task, fd, fa, fc, td, ta, tc, sav, qual in rows:
+        print(f"{task:<8} {fd:>8.4f} {fa:>8.4f} {fc:>8.4f} {td:>10,} {ta:>10,} {tc:>10,} {sav:>8} {qual:>9}")
+
+    print("\nKey finding: Token savings range 77-86% across 3 tasks and 2 runs.")
+    print("Quality ratio A/D = 100% in ALL cases (same F1 always).")
+    print("Tasks 3 and 6 achieve F1(A) = F1(C) (A/C=100%), demonstrating that")
+    print("incremental processing perfectly matches the oracle on these tasks.")
+
+
 def table_5_contribution_summary():
     """Contribution summary."""
     print("\n" + "=" * 80)
@@ -210,9 +242,10 @@ def table_5_contribution_summary():
    process_chunk(monotone_attrs=...) eliminates stochastic compliance failures
    (V3: 60-100% → V4: 100%) and eliminates all no-op retraction cycles.
 
-4. EFFICIENCY (FAIR COMPARISON): Incremental processing achieves X% token
-   savings vs full-recompute using the SAME IncrementalState framework.
-   Both approaches produce correct results; incremental reads each chunk once.
+4. EFFICIENCY (FAIR COMPARISON): Incremental processing achieves 77-86% token
+   savings vs full-recompute using the SAME IncrementalState framework across
+   3 tasks. Quality ratio A/D = 100% in all cases. Confirmed with 2 runs on
+   Task 1 (77.1%, 79.8%). Token savings are task-independent.
 
 5. NEAR-ORACLE ACCURACY: V4 achieves 93.7% of oracle F1 (5-run mean, Task 1)
    and 100% on Tasks 3,6, with P=1.0 across all runs and turns.
@@ -255,6 +288,7 @@ def main():
     table_1_cross_version()
     table_2_fair_comparison()
     table_2b_naive_structural()
+    table_2c_cross_task_efficiency()
     table_3_cross_task()
     table_4_k_sensitivity()
     table_5_contribution_summary()
