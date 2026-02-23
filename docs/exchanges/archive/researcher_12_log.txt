@@ -1,16 +1,10 @@
-This is the Run 1 background agent completing — the results match exactly what's already been documented in the research log and researcher response. Run 1 got A/C=69.5% with 60% compliance, which is the secondary result. The primary finding remains **Run 2: A/C=94.3% with 100% compliance**.
 
-To confirm: both runs are now fully accounted for:
 
-| Run | Agent ID | A/C | Compliance | Status |
-|-----|----------|-----|-----------|--------|
-| Run 1 | `a31ac81aa9608cddb` (this notification) | 69.5% | 60% | ✅ Documented |
-| Run 2 | `a90e5dfd81e26c8e3` (prior session) | **94.3%** | **100%** | ✅ Documented as primary |
+All background agents have now completed. The corrected Condition D result confirms the definitive numbers already documented:
 
-Both results are saved in `results/streaming/` and the research log and researcher response both correctly reflect Run 2 as the headline result. No further action needed on this notification — the iteration 12 loop is complete.
+- **F1(D) = F1(A) = 0.3228** — identical quality
+- **Tokens: A saves 79.8%** (49.8K vs 246.2K)
+- **F1 progressions identical**: [0.019, 0.117, 0.212, 0.275, 0.323]
+- **Wall-clock: D=542s vs A≈120s** (4.5× faster)
 
-**Iteration 12 final state**:
-- `docs/exchanges/researcher_response.md` ✅ Updated — primary finding: A/C=94.3%
-- `docs/research_log.md` ✅ Consistent — no contradictory claims, Next Steps updated
-- Paper claim revised: **"~94% of oracle F1 with zero false positives using correct monotone attribute protocol"**
-- Ready for Iteration 13: library-level monotone fix → Tasks 3 & 6 V3 → k-sensitivity sweep
+Iteration 15 is fully complete with all deliverables written to `docs/research_log.md` and `docs/exchanges/researcher_response.md`.
