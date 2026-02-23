@@ -799,6 +799,40 @@ Do NOT skip the reset() call. Do NOT skip any chunks.
 """
 
 
+def generate_unrolled_chunk_code(num_chunks_to_replay: int) -> str:
+    """Generate unrolled code for resetting and replaying num_chunks_to_replay chunks.
+
+    This is extracted for testability — the code generation had 2 regex bugs
+    that were fixed in Iteration 15. This function can be unit-tested to prevent
+    regressions.
+
+    Args:
+        num_chunks_to_replay: Number of chunks to replay (1-indexed: Turn 1 = 1 chunk).
+
+    Returns:
+        String of unrolled Python code that:
+        1. Parses entities from each context_i variable
+        2. Calls _incremental.process_chunk(i, ...) for each chunk
+    """
+    unrolled_lines = []
+    for ci in range(num_chunks_to_replay):
+        unrolled_lines.append(f"# Process chunk {ci}")
+        unrolled_lines.append(f"entities_{ci} = {{}}")
+        unrolled_lines.append(f"for line in context_{ci}.split('\\n'):")
+        unrolled_lines.append(f"    m = re.search(r'User: (\\d+).*?\\|\\| Label: (.+?)$', line)")
+        unrolled_lines.append(f"    if m:")
+        unrolled_lines.append(f"        uid = m.group(1)")
+        unrolled_lines.append(f"        label = m.group(2).strip().lower()")
+        unrolled_lines.append(f"        if uid not in entities_{ci}:")
+        unrolled_lines.append(f"            entities_{ci}[uid] = {{\"labels\": [], \"qualifying\": False}}")
+        unrolled_lines.append(f"        entities_{ci}[uid][\"labels\"].append(label)")
+        unrolled_lines.append(f"        if label in qualifying_labels:")
+        unrolled_lines.append(f"            entities_{ci}[uid][\"qualifying\"] = True")
+        unrolled_lines.append(f"stats_{ci} = _incremental.process_chunk({ci}, entities_{ci}, pair_checker=check_pair, monotone_attrs={{\"qualifying\"}})")
+        unrolled_lines.append(f"print(f\"  Chunk {ci}: {{stats_{ci}['new_entities']}} new, {{stats_{ci}['total_pairs']}} pairs\")")
+    return "\n".join(unrolled_lines)
+
+
 def run_condition_d_full_recompute(
     labeled_context: str,
     gold_pairs: set,
@@ -865,23 +899,7 @@ def run_condition_d_full_recompute(
     for chunk_i, chunk in enumerate(chunks):
         chunk_num = chunk_i + 1
         # Generate unrolled chunk processing code (no loop, no globals())
-        unrolled_lines = []
-        for ci in range(chunk_num):
-            unrolled_lines.append(f"# Process chunk {ci}")
-            unrolled_lines.append(f"entities_{ci} = {{}}")
-            unrolled_lines.append(f"for line in context_{ci}.split('\\n'):")
-            unrolled_lines.append(f"    m = re.search(r'User: (\\d+).*?\\|\\| Label: (.+?)$', line)")
-            unrolled_lines.append(f"    if m:")
-            unrolled_lines.append(f"        uid = m.group(1)")
-            unrolled_lines.append(f"        label = m.group(2).strip().lower()")
-            unrolled_lines.append(f"        if uid not in entities_{ci}:")
-            unrolled_lines.append(f"            entities_{ci}[uid] = {{\"labels\": [], \"qualifying\": False}}")
-            unrolled_lines.append(f"        entities_{ci}[uid][\"labels\"].append(label)")
-            unrolled_lines.append(f"        if label in qualifying_labels:")
-            unrolled_lines.append(f"            entities_{ci}[uid][\"qualifying\"] = True")
-            unrolled_lines.append(f"stats_{ci} = _incremental.process_chunk({ci}, entities_{ci}, pair_checker=check_pair, monotone_attrs={{\"qualifying\"}})")
-            unrolled_lines.append(f"print(f\"  Chunk {ci}: {{stats_{ci}['new_entities']}} new, {{stats_{ci}['total_pairs']}} pairs\")")
-        unrolled_chunk_code = "\n".join(unrolled_lines)
+        unrolled_chunk_code = generate_unrolled_chunk_code(chunk_num)
 
         root_prompt = CHUNK_PROMPT_FULL_RECOMPUTE_V4.format(
             task_idx=task_idx,
