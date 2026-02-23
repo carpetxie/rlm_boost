@@ -1,227 +1,198 @@
-# Critique — Iteration 11
+# Critique — Iteration 10
 
 STATUS: CONTINUE
 
----
-
 ## Overall Assessment
 
-Iteration 15 resolves the most critical blocking issue from the prior critique: Condition D (full-recompute with same IncrementalState framework) now provides a structurally fair efficiency comparison, showing **79.8% token savings at 100% quality retention**. Combined with k=3 stability (σ=0.000 across 4 runs), the paper's central claim is now defensible: incremental processing achieves near-oracle quality (97.1% at k=3) with substantial token savings against a fair baseline. However, the Condition D result rests on a **single run**, and two significant gaps remain: (1) no second Condition D run to confirm the 79.8% headline, and (2) the paper still tests only static context chunked sequentially — the thesis motivation (dynamic context) has zero live experiments after 15 iterations.
-
----
+Iteration 16 represents a genuinely mature research result: the Condition D fair comparison is now replicated across 3 tasks (4 experiments) with 100% quality retention and 77-86% token savings. The CRITICAL GAP is resolved. The paper's empirical core is solid — what remains is (1) the absence of any dynamic context experiment after 16 iterations despite this being the thesis motivation, (2) the narrow evaluation scope (single corpus, single model, 3 tasks from the same task family), and (3) a subtle but important gap between what the F1 numbers actually measure (coverage-constrained pair finding on a 25K-char window) vs what the paper claims (near-oracle incremental processing). The research is approaching submission quality but needs two specific experiments to strengthen the claims from "works on OOLONG-Pairs with gpt-4o-mini" to "principled framework with understood limitations."
 
 ## Reflection on Prior Feedback
 
 **Resolved — not re-raising:**
-- Table 2 structural fairness: Condition D implemented and run. Done.
-- k=3 single-run concern: 4 runs, σ=0.000. Done.
-- Outlier diagnosis (55 pairs): ~1 entity boundary effect, 3.6% impact. Done.
-- Compliance degradation: analyzed, no threshold found, k≤5 recommendation. Done.
-- Paper tables with 5-run means: `paper_summary_tables.py` updated. Done.
-- Safety invariant docstring: added to `process_chunk()`. Done.
-- Token variance caveat: documented. Done.
+- Condition D replication: done (2 runs, consistent). Accepted.
+- Cross-task Condition D: done (Tasks 3, 6). Accepted.
+- Turn 2 token anomaly: explained as efficient template execution. Researcher pushback accepted.
+- `process_chunk()` mutation docstring: added. Accepted.
+- Condition D code generation tests: 5 tests added. Accepted.
+- Paper table cherry-picking: tables show both 5-run mean and best run. Accepted.
+- Dynamic context experiment deferred: accepted as reasonable prioritization within iteration budget.
 
-**Accepted and not re-raising:**
-- Dynamic context experiment: correctly deferred as non-blocking for current paper scope. However, I will flag its strategic importance below.
-- Lazy retraction: correctly deferred post-V4.
-- σ-parameterized cost model modest improvement: accepted as publishable with caveats.
-
----
+**Acknowledged from researcher pushbacks:**
+- Turn 2 anomaly was correctly identified as non-anomalous by the researcher. My prior concern was wrong.
+- Dynamic context was correctly deferred to focus on higher-priority D replication and cross-task D. Not re-raising the deferral — but escalating the strategic importance (see below).
 
 ## Scores
 
 | Criterion | Score | Delta | Comment |
 |-----------|-------|-------|---------|
-| Novelty | 7/10 | +0 | Monotone accumulation correctness condition, retraction taxonomy, at-risk fraction predictor, library-vs-template principle are genuinely novel. All demonstrated on single corpus. Dynamic context contribution remains aspirational. |
-| Technical Soundness | 8/10 | +0 | Condition D provides fair comparison. k=3 deterministic. V4 library fix eliminates stochastic compliance. One concern: Condition D is single-run with a suspicious Turn 2 token anomaly (see below). |
-| Benchmark Performance | 8/10 | +0 | k=3: 97.1% A/C at 1.30× token cost. k=5: 93.7% mean with σ=1.3pp. P=1.0 across all. Condition D confirms 79.8% savings at 100% quality. |
-| Scalability | 6/10 | +0 | k-sensitivity exists (3,5,7,10). Condition D provides real cost comparison. Still single-corpus (N=231), single-model. k=7/10 compliance degradation bounds deployment. |
-| Research Maturity | 7/10 | +0 | All blocking issues resolved. Paper tables comprehensive. Missing: Condition D replication, cross-task D comparison, and framing decision on "dynamic" vs "incremental streaming." |
-
----
+| Novelty | 7/10 | +0 | Monotone accumulation condition, retraction taxonomy (360×), at-risk fraction predictor, library-vs-template principle are independently publishable. No dynamic context experiment means the "Dynamic RLM" thesis motivation remains aspirational. Score stays until dynamic context has at least one experiment. |
+| Technical Soundness | 8.5/10 | +0.5 | 4 Condition D experiments across 3 tasks. 5-run stability (σ=0.004). k-sensitivity measured. Retraction accounting corrected. Code generation tested. The implementation matches the claims. Half-point increment for cross-task D replication. |
+| Benchmark Performance | 8/10 | +0 | 77-86% token savings at 100% quality. k=3 at 97.1% A/C with σ=0.000. P=1.0 universal. The absolute F1 values (0.32-0.34) are low because of the 25K coverage ceiling — this is understood and correctly characterized. |
+| Scalability | 6/10 | +0 | Still single-corpus (N=231), single-model (gpt-4o-mini), 3 tasks from symmetric-monotone family. Task 11 non-monotone experiment shows F1=0.047 (protocol works but accuracy is poor). No data beyond k=10 or beyond OOLONG-Pairs. |
+| Research Maturity | 7.5/10 | +0.5 | Paper tables comprehensive. Fair comparison exists. Multi-run stability confirmed. Missing: dynamic context experiment, cross-model validation, and paper framing finalization. |
 
 ## Architecture Review
 
-### The `process_chunk()` Code Is Sound
+### The Core Architecture Is Sound
 
-Reviewed `rlm/core/incremental.py` end-to-end. The implementation is correct:
-- Monotone merge logic (lines 342-360) correctly preserves truthy cached values and detects no-op updates
-- No-op update detection (lines 356-360) correctly skips `updated_ids` when all monotone attrs unchanged
-- Retraction accounting (lines 406-426) properly distinguishes noop vs permanent retractions
-- Idempotency guard (lines 302-315) returns cached stats on repeated calls
-- `checked_in_updated_sweep` deduplication (lines 437-456) prevents double-counting
+The `IncrementalState` / `EntityCache` / `PairTracker` system in `rlm/core/incremental.py` is well-implemented. After reviewing the code end-to-end:
 
-**Subtle mutation issue**: In the monotone merge (line 351), `attrs[attr] = old_val` mutates the caller's `new_entities` dict. This is safe in current usage but will surprise future callers who reuse the dict after calling `process_chunk()`. Worth a note in the docstring: "Note: when monotone_attrs is provided, the attrs dicts in new_entities may be mutated (truthy cached values written back)."
+- Monotone merge logic (lines 346-364) correctly handles all four cases: (truthy→truthy, truthy→falsy preserve, falsy→truthy genuine change, falsy→falsy)
+- No-op update detection (line 360-364) correctly skips `updated_ids` when all monotone attrs unchanged
+- Idempotency guard (lines 311-319) prevents Failure Mode C with O(1) cached return
+- `checked_in_updated_sweep` deduplication (lines 441-460) prevents inflated pair_checks
+- `retract_entity()` partner cleanup (lines 167-170) prevents double-counting
 
-### Condition D Turn 2 Token Anomaly — Investigate Before Claiming 79.8%
+**No new code issues found in the core library.** The implementation quality has improved substantially over iterations.
 
-From `condition_d_vs_a_task1_k5.json`, Condition D's per-turn input tokens:
+### Remaining Architectural Limitation: Token Cost Reporting
 
-| Turn | D Input Tokens | D Iteration Count |
-|------|---------------|-------------------|
-| 1 | 37,005 | 9 |
-| 2 | **2,052** | **1** |
-| 3 | 26,233 | 6 |
-| 4 | 73,059 | 9 |
-| 5 | 107,871 | 9 |
+The paper claims "77-86% token savings" but Condition D's token counts are highly variable across runs: Task 1 D went from 246K (Run 1) to 80K (Run 2) — a 3× range — entirely due to stochastic LLM iteration counts. This means the "savings" number depends heavily on how many iterations the D baseline happens to use.
 
-Turn 2 used only **2,052 tokens and 1 iteration** — suspiciously low for replaying chunks 0+1. Expected: approximately 2× Turn 1's tokens since Turn 2 replays both chunks. The 1-iteration count suggests the model may have terminated early (e.g., after reset only, or after replaying just chunk 0 without chunk 1).
+**Concrete issue**: The 79.8% savings (246K vs 49K) and 77.1% savings (80K vs 18K) both compare different-variance numerators and denominators. The savings percentage is stable (77-80%) but this stability is somewhat coincidental — both A and D token counts fluctuate, and the ratio happens to be stable because both scale with the same stochastic iteration-count factor.
 
-**However**, the pair counts tell a different story: Turn 2 shows 496 pairs, which matches Condition A's Turn 2 (496 pairs). So the OUTPUT is correct. The low token count might reflect the model efficiently executing the unrolled replay in a single iteration. But this needs verification.
-
-**Required check**: On the second Condition D run, log `_incremental.get_stats()["chunks_processed"]` after each turn. If Turn 2 shows chunks_processed=2, the replay is correct and the low token count reflects efficient execution. If chunks_processed<2, the replay is incomplete and the 79.8% figure may be inflated.
-
-### Condition A Token Variance in D-vs-A Experiment
-
-In the Condition D experiment file, Condition A used 49,848 total input tokens (2.02× vs C). But the 5-run mean is 43,434 (1.80×). For the paper, report:
-- Single-experiment D-vs-A comparison: 79.8% savings (both from same session)
-- Sensitivity check using 5-run mean A: 246,220 vs 43,434 = 82.4% savings (even stronger)
-
-Both framings support the efficiency claim.
-
----
+**Recommendation**: Report the **structural savings formula** as the primary metric: chunk-reads(D) = k(k+1)/2, chunk-reads(A) = k, structural savings = 1 - 2/(k+1). At k=5: savings = 1 - 2/6 = 66.7%. This is deterministic and more defensible than stochastic API token ratios. Report the empirical 77-86% as "empirical savings exceed the structural bound due to reduced per-turn prompt overhead in shorter contexts."
 
 ## Novelty Assessment
 
-### Three Genuine Contributions
+### What's Genuinely New (Strong)
 
-1. **Monotone accumulation as a correctness condition**: The observation that "at least one" predicates require monotone attribute merging is specific to the LLM-as-programmer setting (where per-chunk attribute extraction is stochastically incomplete). The at-risk fraction predictor generalizes this to a pre-experiment diagnostic. This is not in the incremental view maintenance literature.
+1. **Non-monotonic retraction mechanism for LLM incremental computation**: The retraction taxonomy (360× range: 44 to 15,824 retractions across task types) with mechanistic explanation (temporal asymmetry, selectivity-driven retraction density) is a genuine contribution. No prior work characterizes retraction patterns in LLM-driven incremental pipelines.
 
-2. **Library-vs-template design principle**: The V3→V4 progression (60% stochastic → 100% deterministic compliance) is empirical evidence for a general principle in LLM-in-the-loop systems. Relevant beyond RLM.
+2. **Monotone attribute accumulation as a correctness condition**: The discovery that "at least one" predicates require monotone accumulation, the 2-line fix, and the 30pp A/C improvement is a clean result with practical value.
 
-3. **Retraction taxonomy**: 360× range across task types, mechanistic explanation (selectivity + temporal direction), empirical validation across 11 tasks. Novel characterization.
+3. **At-risk fraction as a predictive diagnostic**: Ordering prediction (Task 6 > Task 3 > Task 1 matches ΔA/C ordering) is validated. This is a useful corpus-level diagnostic.
 
-### The Missing Piece: Dynamic Context
+4. **Library-vs-template principle**: Demonstrating that moving invariants to the library eliminates stochastic compliance failures (V3 60-100% → V4 100%) is a practical architectural insight.
 
-After 15 iterations, every experiment uses OOLONG-Pairs chunked sequentially. The paper's thesis motivation is "real-world context is dynamic," but the evidence is "we can process static context incrementally."
+### What's Missing for Higher Novelty Score
 
-**Strategic recommendation**: One minimal 3-turn experiment with genuine entity attribute changes mid-stream ($1-2, 2 hours) would:
-- Demonstrate the retraction mechanism handles real updates (not just stochastic re-appearances)
-- Provide the "dynamic" evidence the thesis needs
-- Transform the paper's "Discussion/Future Work" into "We demonstrate dynamic handling in a controlled setting and leave full evaluation to future work"
+**The "Dynamic RLM" thesis framing has zero supporting experiments after 16 iterations.** All experiments process static OOLONG-Pairs data chunked sequentially. The dynamic context promised in the thesis motivation — entities changing attributes, new information invalidating old conclusions, streaming real-time data — is tested only in simulation (Experiment 4, retraction analysis). The retraction mechanism exists and is tested in unit tests, but there is no live API experiment where context actually changes between turns.
 
-**Without this**: Scope the paper as "Incremental Computation for Sequential Context Processing in LLM Programs" and frame dynamic context as future work. The contribution is still substantial — just honestly scoped.
+This is not a blocking issue for the current paper scope (correctly reframed as "Incremental Computation for Sequential Context Processing"). But it means the paper's contribution is **incremental computation**, not **dynamic computation**. The "Dynamic RLM" branding oversells the current evidence.
 
 ### What Would Push Novelty to 8/10
 
-Formalize the retraction taxonomy into **predictive bounds**. Currently descriptive (360× range). Derive: "Given predicate class C ∈ {existential, cardinality, temporal-before, temporal-after} and entity selectivity σ, retraction rate r(C, σ, k) is O(f(σ)) for existential and O(g(σ)) for cardinality." Even order-of-magnitude bounds would turn descriptive data into a predictive tool.
+One focused experiment: **genuine entity attribute change across turns**. Not a simulation — a live API run where:
+- Turn 1: Process chunk with entities {A: qualifying=True}
+- Turn 2: Inject modified chunk where entity A's data changed (e.g., new label that would make A non-qualifying under a different predicate)
+- Turn 3: Verify retraction mechanism fires correctly in the live pipeline
 
----
+Cost: $1-2. Time: 2 hours. This transforms the retraction taxonomy from "simulation finding" to "empirically demonstrated in live LLM pipeline."
 
 ## 3rd-Party Clarity Test
 
-### Table 2 (D vs A vs C) — PASS ✅ (with replication caveat)
+### Experiment: Condition D vs A (Table 2c) — **PASSES**
 
-| What's compared | Why it's fair | Why it matters |
-|----------------|--------------|----------------|
-| D = same IncrementalState, reset+replay all chunks each turn | Isolates efficiency from framework benefit | Shows 79.8% savings is from incremental strategy, not from having a framework |
-| A = same IncrementalState, new chunk only | Identical setup except strategy | Achieves 100% of D's F1 quality |
-| C = single-pass oracle | Quality upper bound | A achieves 94.3% of C |
+A skeptical engineer reads:
+- **What's compared**: Full-recompute (same framework, reset+replay all chunks) vs incremental (new chunk only)
+- **Why fair**: Both use IncrementalState with monotone_attrs. Only difference is strategy.
+- **Why result matters**: 77-86% token savings at 100% quality. 4 experiments, 3 tasks, 2 replications.
 
-A skeptical engineer would understand this comparison. **Caveat**: single Condition D run. For a paper, N≥2 with consistent results is the minimum bar. Currently **near-blocking** — structurally correct but statistically thin.
+This is the strongest experiment in the project. Clean, fair, unambiguous.
 
-### Table 1 (Cross-Version V2→V4) — PASS ✅
+### Experiment: A/C Ratio (Table 1, Table 3) — **PASSES with caveat**
 
-Clear progression with honest reporting of V3 stochastic behavior. V4 5-run statistics with mean±std.
+A skeptical engineer reads:
+- **What's compared**: Incremental (k=5, 5K/chunk) vs single-pass oracle (25K)
+- **Fair?**: Yes — same total context budget.
+- **Why it matters**: 93.7% of oracle quality.
 
-### k=3 Stability — PASS ✅
+**Caveat**: The absolute F1 values (0.32) are low because of the 25K coverage ceiling (only 20.7% of gold pairs are reachable in 25K chars). A reviewer might ask "why not run on the full 96K context?" The answer is that Condition C Full achieves F1=1.0 — but running Condition A on 96K chars (k=5, 19.2K/chunk) would be the more compelling comparison. This experiment hasn't been run. The 25K constraint is practical (API cost), but a reviewer may see it as artificial.
 
-4 runs, σ=0.000, 97.1% A/C, 100% compliance. The paper's strongest single data point.
+### Experiment: Naive vs Incremental (Table 2b) — **Correctly labeled as structural, not strawman**
 
-### Cross-Task V4 (Table 3) — PASS with caveat ✅
+The naive comparison (F1=0 vs F1=0.3228) is correctly labeled as "structural advantage" in the paper tables. The naive approach fails at the framework level, not the efficiency level. The researcher has correctly separated this from the fair D vs A comparison. **No longer blocking** — properly labeled.
 
-Tasks 3/6 A/C=100%, at-risk prediction validated. **Caveat**: single-run each. Second run for each (~$0.04 total) would be cheap insurance.
+### Experiment: At-Risk Fraction Prediction (Table 3) — **PASSES**
 
-### Table 2b (Naive vs Incremental) — CORRECTLY LABELED ✅
+The prediction ordering (ΔA/C: Task 6 > Task 3 > Task 1) matches at-risk fraction ordering. Validated across 3 tasks. A skeptical engineer would accept this as a validated diagnostic tool.
 
-Researcher correctly separates this as "structural advantage" table, not efficiency comparison. Good framing.
+### MISSING Experiment: Dynamic Context — **BLOCKING for "Dynamic RLM" framing, NOT blocking for "Incremental Sequential Processing" framing**
 
----
+No experiment tests context that actually changes. All experiments chunk static data. If the paper uses "Dynamic" in the title/framing, this is a blocking gap. If reframed as "Sequential Incremental," the gap becomes "future work."
 
 ## Experiment Critique
 
-### Condition D Replication (HIGHEST PRIORITY)
+### What's Solid
 
-The 79.8% savings headline is from one run. The Turn 2 token/iteration anomaly (2,052 tokens, 1 iteration) warrants investigation. Run Condition D again with explicit `chunks_processed` verification per turn.
+1. **Multi-run stability**: 5 runs for k=5 (σ=0.004), 4 runs for k=3 (σ=0.000). This is publication-grade reproducibility evidence.
+2. **Cross-task generalization**: 3 tasks with consistent results. At-risk predictor validated.
+3. **Condition D fair comparison**: 4 experiments, 3 tasks. The headline claim is well-supported.
+4. **k-sensitivity**: k ∈ {3,5,7,10} with compliance analysis. Practical recommendation (k≤5) is data-driven.
 
-This is $0.06 and 30 minutes. It's the difference between "the paper's headline is confirmed" and "the paper's headline is unverified."
+### What's Missing (in priority order)
 
-### Cross-Task Condition D (HIGH PRIORITY)
+1. **Dynamic context proof-of-concept** (HIGH — deferred twice now): The researcher has deferred this across iterations 15 and 16. The deferral was reasonable each time (higher-priority items existed). But at iteration 16, all higher-priority items are resolved. This is now the #1 experiment.
 
-Run D on Tasks 3 and 6. Expected: ~80% token savings (task-independent since savings come from reading each chunk once). Confirms efficiency generalizes beyond Task 1.
+2. **Full-corpus incremental run** (MEDIUM): Run Condition A vs C on the full 96K corpus (k=5, ~19K/chunk). The current 25K budget constrains all F1 values to ≤0.34. Showing that incremental processing scales to the full corpus would strengthen the scalability claim. Cost: ~$0.50.
 
-Cost: ~$0.12. Time: 1 hour.
-
-### Dynamic Context Proof-of-Concept (MEDIUM PRIORITY — Strategic)
-
-Not blocking for current paper scope, but high-impact for framing:
-- Take Task 1's first 10K chars. Split into 2 chunks (5K each).
-- After chunk 2, inject a "correction" chunk: modify 5 entities' labels (e.g., user X had "location" → now only "description" in new data)
-- Run incremental V4 (3 turns). Verify retraction fires for affected entities. Check final correctness.
-- Run Condition D (3 turns). Verify same final pairs, higher tokens.
-- This is 3 turns, $1-2. One paragraph in the paper showing the architecture handles its motivating scenario.
-
-### Tasks 3/6 V4 Second Run (LOW PRIORITY)
-
-One additional run each to verify A/C=100% is reproducible. Very cheap (~$0.04).
-
----
+3. **Cross-model sanity check** (LOW-MEDIUM): One run of the headline experiment (Task 1, k=5, V4) with a different model (e.g., gpt-4o or claude-3.5-sonnet). If the same patterns hold (P=1.0, similar A/C ratio), the contribution generalizes beyond gpt-4o-mini. If patterns differ, that's a finding worth reporting. Cost: ~$0.50.
 
 ## The One Big Thing
 
-**Run Condition D a second time with explicit per-turn `chunks_processed` verification.**
+**Run the dynamic context proof-of-concept.** This has been the #1 deferred item for 3 iterations. Every blocking issue that was higher priority is now resolved. The retraction mechanism — the most architecturally novel component — has never been tested with actual dynamic data in a live API run. One $1-2 experiment that demonstrates a retraction firing correctly on genuinely changed entity data would:
 
-The Turn 2 anomaly (2,052 tokens, 1 iteration for a 2-chunk replay) needs confirmation. If the replay is correct, the 79.8% figure stands and the paper's headline efficiency claim is solid. If incorrect, the figure needs correction. This is 30 minutes and $0.06. Everything else — cross-task D, dynamic proof-of-concept, retraction bounds formalization — follows from a confirmed headline number.
+1. Validate the retraction mechanism end-to-end (not just in simulation)
+2. Support the "Dynamic RLM" thesis framing (currently unsupported)
+3. Demonstrate the 360× retraction taxonomy on real data
+4. Differentiate this work from simple chunked processing (which doesn't need retractions)
 
----
+**Concrete design**: Use OOLONG-Pairs Task 1, but modify the context between turns:
+- Turn 1 (chunk 0): Normal processing, entities parsed with labels
+- Turn 2 (chunk 1): Normal incremental processing
+- Turn 3 (modified chunk): Re-inject chunk 0's text but with 5 entities' labels changed (e.g., replace "numeric value" with "description"). This simulates a document edit.
+- Measure: (a) retraction fires for the 5 modified entities, (b) pair tracker correctly updates, (c) F1 computed against the NEW ground truth (reflecting the edits)
+
+This is a 2-hour implementation using the existing `run_condition_a_v4()` framework with a context modification step inserted between turns.
 
 ## Specific Experiments to Run
 
-1. **Condition D replication with `chunks_processed` logging ($0.06, 30 min)**:
-   - In `run_condition_d_full_recompute()`, after each turn, verify `incr.get_stats()["chunks_processed"] == turn_number`
-   - Report D input tokens, F1, wall-clock for second run
-   - If Turn 2 chunks_processed=2: confirmed. If <2: debug unrolled code generator
+1. **Dynamic context proof-of-concept ($1-2, 2 hrs) — HIGHEST**:
+   - Design above. Validates retraction mechanism on live data.
+   - Success criterion: retractions fire for modified entities AND final pairs are correct per updated ground truth.
 
-2. **Cross-task Condition D — Tasks 3 and 6 ($0.12, 1 hr)**:
-   - Run D vs A on Tasks 3 and 6
-   - Expected: ~80% token savings, F1(A)=F1(D) for each task
-   - Completes "efficiency generalizes" claim
+2. **Full-corpus incremental run ($0.50, 1 hr) — MEDIUM**:
+   - Task 1, k=5, ~19K chars/chunk, total 96K context
+   - Condition A (incremental) vs Condition C (single-pass oracle on full 96K)
+   - Expected: higher absolute F1 (potentially approaching 1.0 since C Full = 1.0)
+   - This removes the "artificial 25K budget" critique
 
-3. **Tasks 3/6 V4 second run ($0.04, 15 min)**:
-   - Confirm A/C=100% is reproducible (currently single-run)
+3. **Cross-model sanity check ($0.50, 30 min) — LOW-MEDIUM**:
+   - Task 1, k=5, V4 with gpt-4o
+   - Report: F1, A/C, compliance, P
+   - Even a single run provides cross-model evidence
 
-4. **Dynamic context proof-of-concept ($1-2, 2 hrs)**:
-   - 3-turn experiment with genuine entity attribute changes at turn 3
-   - Shows retraction mechanism handles real updates, not just stochastic re-appearances
-   - One paragraph in paper's evaluation section
+4. **Structural savings formula derivation ($0, 30 min) — LOW but high paper value**:
+   - Derive and report: chunk-reads(D) = k(k+1)/2, chunk-reads(A) = k, structural savings = 1 - 2/(k+1)
+   - At k=5: savings = 1 - 2/6 = 66.7% (matches simulation perfectly)
+   - This is more defensible than stochastic API token ratios and should be the primary savings metric in the paper
+   - Report empirical 77-86% as exceeding the structural bound (due to reduced per-turn prompt complexity)
 
-5. **Unit test for `run_condition_d_full_recompute()` code generation ($0, 30 min)**:
-   - Generate unrolled code for k=3
-   - Verify it contains `_incremental.reset()`, `process_chunk(0, ...)`, `process_chunk(1, ...)`, `process_chunk(2, ...)`
-   - Prevents regression of the regex bugs that caused 2 failed runs
-
----
+5. **Paper framing decision ($0, 1 hr) — REQUIRED before submission**:
+   - If dynamic context experiment succeeds: frame as "Incremental and Dynamic Computation for LLM Programs"
+   - If dynamic context experiment is skipped: frame as "Incremental Computation for Sequential Context Processing in LLM Programs" with dynamic context as explicitly-scoped future work
+   - Do NOT use "Dynamic RLM" in the title without a dynamic context experiment
 
 ## Code Issues Found
 
-1. **`process_chunk()` mutates caller's `new_entities` dicts (`rlm/core/incremental.py`, line 351)**:
-   `attrs[attr] = old_val` writes back into the caller's dict during monotone merge. Safe in current usage but will surprise future callers who reuse the dict. Fix options: (a) copy attrs before mutating (`attrs = dict(attrs)` at entity loop start), or (b) document the mutation in the docstring. Option (b) is simpler and sufficient for paper scope.
+1. **Task 6 V4 Run 2: Oracle C failed with F1=0.0 (stochastic LLM failure, 0 entities found)**:
+   The paper uses C from the D experiment as a replacement. This is acceptable but reveals fragility in the oracle. Add `max_retries=3` to `run_condition_c_oracle()` with F1>0 as success criterion. This is a simple defensive change that prevents future oracle failures from wasting experiment budget.
 
-2. **Condition D Turn 2 may have incomplete replay**:
-   2,052 input tokens and 1 iteration for replaying 2 chunks is anomalous (Turn 1 replaying 1 chunk used 37,005 tokens and 9 iterations). Verify the generated prompt for Turn 2 actually contains `process_chunk(0, ...)` AND `process_chunk(1, ...)` calls. If it only contains `process_chunk(1, ...)`, the savings figure is inflated.
+2. **Condition D token variance is extreme (246K vs 80K for identical F1)**:
+   `run_condition_d_full_recompute()` generates unrolled code that the LLM sometimes executes in 1 iteration and sometimes in 9. Report savings using the **minimum-token** D run as the conservative baseline (77.1% savings against efficient D is more defensible than 79.8% against inefficient D).
 
-3. **No test coverage for `run_condition_d_full_recompute()` code generation**:
-   This function generates unrolled code dynamically and already had 2 regex bugs (fixed on 3rd attempt). A unit test that parses the generated code for k=3 and verifies the expected `reset()` + `process_chunk()` calls would prevent regressions.
+3. **No execution-level test for `generate_unrolled_chunk_code()`**:
+   The 5 new tests check structural properties. Add one test that `exec()`s the generated code with a mock `_incremental` object and verifies correct pair output. This catches semantic bugs (not just syntactic ones) in the code generator.
 
-4. **`paper_summary_tables.py` Table 1 "V4 best run" cherry-picking risk (line 36)**:
-   Reports 0.96× token ratio from the single best run (23,187 tokens). Acceptable only because the table also shows the 5-run mean (1.80×). In the paper narrative, use ONLY the mean unless explicitly presenting a distribution.
-
----
+4. **`PairTracker._retracted` unbounded growth**:
+   `clear_retracted()` exists but is never called. For OOLONG-Pairs scale this is fine. For production use, either auto-clear at end of `process_chunk()` or document that callers must manage this. Low priority for paper; medium priority if this code is released as a library.
 
 ## Acknowledged Limitations
 
-- All results on single model (gpt-4o-mini), single corpus (OOLONG-Pairs, N=231), single domain. Cross-generalization explicitly out of scope.
-- "Streaming" evaluation uses static context chunked sequentially. Genuine dynamic context (real-time, attribute changes, entity deletion) is the thesis motivation but remains untested in live experiments. Scope paper as "sequential context revelation" with dynamic context as future work.
-- Condition D is single-run. The 79.8% figure is the headline efficiency claim and needs at minimum one replication.
-- Token cost variance (~3.7× across runs with identical F1) reflects stochastic LLM iteration counts. Report means with std in all paper tables.
-- k≥7 shows compliance degradation (86-90%). Recommend k≤5 for production deployment; note compliance at high k is addressable via few-shot examples or fine-tuning (untested).
+- Single corpus (OOLONG-Pairs, N=231) with one entity type (users). Cross-corpus generalization is out of scope.
+- Single model (gpt-4o-mini). Cross-model generalization requires future work.
+- Only monotone predicate tasks (1, 3, 6) show strong results. Non-monotone Task 11 shows F1=0.047 — the framework works but accuracy is poor. The paper should be explicit about this scope boundary.
+- The 25K context budget constrains absolute F1 to ≤0.34. A full-corpus experiment would test whether the incremental mechanism scales to larger absolute F1 values.
+- Token savings percentages are influenced by stochastic LLM iteration counts. The structural formula (66.7% at k=5) is more robust than empirical token ratios.
+- The "Dynamic RLM" thesis framing remains aspirational until a dynamic context experiment is run. The current evidence supports "Incremental Sequential Processing" only.
