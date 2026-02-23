@@ -58,6 +58,32 @@ A key insight: existing benchmarks (OOLONG, S-NIAH, etc.) only test static conte
 
 You don't have to go down this path if it doesn't pan out, but it's worth exploring early.
 
+## MANDATORY: Head-to-Head Baseline Comparison
+
+The single most important missing piece in this research is a **direct comparison between Incremental RLM and Naive RLM (full recompute)**. This is the comparison that proves the system works. Without it, nothing else matters.
+
+**Naive RLM (the baseline)**: Same streaming setup (k chunks arriving over time), but on each new chunk, the RLM re-reads ALL context from scratch and recomputes everything. No caching, no incremental state. This is what a standard RLM.completion() call does.
+
+**Incremental RLM (the system)**: Same streaming setup, but uses EntityCache/PairTracker/IncrementalState to only process new data each turn.
+
+**The comparison must measure** (on the same task, same chunks, same model):
+- F1 (should be equal or near-equal — both see the same total context)
+- Total tokens consumed (incremental should be lower)
+- Total pair-check operations (incremental should be lower)
+- Wall-clock time (incremental should be faster)
+- Total cost in dollars (incremental should be cheaper)
+
+**Why this matters**: The current experiments compare incremental vs single-turn oracle, which answers "does chunking lose quality?" That's a secondary question. The primary question is: "given that data arrives in chunks, is incremental processing more efficient than reprocessing everything?" The naive RLM baseline answers this directly.
+
+## Iteration Pacing
+
+You are running a fixed number of iterations. Pace your work accordingly:
+
+- **Early iterations (1-70%)**: Explore, fix bugs, push new directions, address critique holes. Run small/cheap experiments to validate ideas. Fix any ambiguous comparisons. Build infrastructure for the full experiment.
+- **Final iterations (70-100%)**: Run the full production experiment. Use real API calls, full context, multiple tasks, multiple seeds. Produce the definitive comparison table. No more exploration — execute and measure.
+
+On the final 1-2 iterations: produce the **paper-ready comparison table** with real numbers. The table must be unambiguous — a skeptical 3rd party should instantly understand why incremental RLM is better.
+
 ## Guidelines
 
 - **Build and measure.** Don't theorize when you can prototype. Write the code, run it, see what happens.
@@ -65,6 +91,7 @@ You don't have to go down this path if it doesn't pan out, but it's worth explor
 - **Document everything** in the research log. Future iterations depend on understanding what was tried and why.
 - **Push back on bad suggestions.** If the critiquer wants something that would make the architecture worse, explain why.
 - **Do NOT set STATUS: CONVERGED.** Always look for the next experiment to run.
+- **Every experiment must pass the 3rd-party clarity test.** If a skeptical engineer can't instantly see what's being compared and why the result matters, reframe the experiment.
 
 ## Dead End Protocol
 
