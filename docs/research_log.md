@@ -1,6 +1,6 @@
 # RLM Research Log
 
-## Status: Active — Iteration 14 Complete
+## Status: Active — Iteration 15 Complete
 
 ---
 
@@ -2792,18 +2792,230 @@ Run with: `python eval/paper_summary_tables.py`
 
 ---
 
-### Next Steps (Iteration 15)
+---
 
-1. **Consolidate the outlier investigation**: V4 Exp32 (F1=0.3131) found 55 fewer pairs than
-   the other 4 runs. Investigate which entities/pairs are missing — likely entities at chunk
-   boundaries where stochastic label extraction produced different qualifying assignments.
+## Iteration 15 — Fair Efficiency Comparison (Condition D) + k=3 Stability + Diagnostics
 
-2. **Final paper figure**: Generate a matplotlib/seaborn F1 progression plot showing all 5 V4
-   runs overlaid, with the oracle C line at F1=0.3424.
+**Date**: 2026-02-23 | **Status**: CONTINUE
 
-3. **Additional k-sensitivity data at k=3**: Run 3 additional k=3 stability tests to confirm
-   the 97.1% A/C finding is reproducible (highest A/C operating point).
+### Summary
 
-4. **Cross-model generalization note**: Document that all results use gpt-4o-mini; cross-model
-   generalization requires future work.
+Iteration 15 addresses the critique's BLOCKING issue: the structurally unfair Table 2 comparison.
+Implements Condition D (Full-Recompute RLM) — uses the SAME IncrementalState framework as
+Condition A but calls `reset()` + replays all accumulated chunks each turn. This isolates the
+incremental EFFICIENCY advantage from the structural framework advantage.
+
+Additionally: k=3 stability confirmed (4 runs, σ=0.000), outlier diagnosed, compliance degradation
+analyzed, safety docstring added to `process_chunk()`, paper tables updated with 5-run means.
+
+**Headline results**:
+1. **Condition D vs A: F1 identical (0.3228), tokens 79.8% lower for incremental**
+2. **k=3 stability: F1=0.3326 ± 0.000 across 4 runs (deterministic), A/C=97.1%**
+3. **Outlier (Exp32): ~1 fewer qualifying entity at chunk boundaries, 3.6% pair impact**
+4. **Compliance degradation: no clean entity-count threshold; recommend k≤5**
+
+---
+
+### Experiment 37: Condition D — Full-Recompute RLM (Fair Efficiency Comparison)
+
+**Date**: 2026-02-23 | **Model**: gpt-4o-mini | **Cost**: ~$0.06
+**Script**: `eval/label_aware_v4_experiment.py --condition-d --task 1 --k 5`
+**Output**: `results/streaming/condition_d_vs_a_task1_k5.json`
+
+**Purpose**: Address the critique's BLOCKING issue. The old Table 2 compared Naive (no framework,
+F1=0) vs Incremental (with IncrementalState, F1=0.3228). This was unfair because the Naive
+approach failed at the framework level, not the computation level. Condition D uses the SAME
+IncrementalState framework but resets state and replays all chunks each turn.
+
+**Implementation**: New function `run_condition_d_full_recompute()` with unrolled per-chunk code
+generation. Each turn t:
+1. `_incremental.reset()` — clear all state
+2. `process_chunk(0, entities_0, ...) ... process_chunk(t, entities_t, ...)` — replay all
+3. Collect pairs from `pair_tracker.get_pairs()`
+
+**Bug encountered and fixed**: Two initial runs failed (F1=0) due to regex over-escaping in
+the unrolled code generator. `\\\\|\\\\|` produced `\\|\\|` in the raw string, matching literal
+`\|` instead of `||`. Fixed to `\\|\\|` → `\|\|` in raw string → matches `||`. Third run
+succeeded with correct results.
+
+**Results (corrected run)**:
+
+| Metric | D (Full-Recompute) | A (Incremental) | C (Oracle) |
+|--------|-------------------|-----------------|------------|
+| F1 | **0.3228** | **0.3228** | 0.3424 |
+| Input tokens | 246,220 | 49,848 | 24,674 |
+| Token ratio vs C | 9.98× | 2.02× | 1.00× |
+| Wall-clock (sec) | 542.1 | ~120 | ~30 |
+| Replay correct | 5/5 | 5/5 (compliant) | N/A |
+
+**Key findings**:
+
+1. **F1 identical**: Both A and D achieve F1=0.3228. The incremental approach loses ZERO quality
+   compared to full recompute. The F1 progression is identical: [0.019, 0.117, 0.212, 0.275, 0.323].
+
+2. **79.8% token savings**: Incremental uses 49,848 tokens vs full-recompute's 246,220 tokens.
+   The savings come from reading each chunk exactly once (incremental) vs re-reading all prior
+   chunks at every turn (full-recompute: turn t reads t chunks).
+
+3. **Token scaling**: Full-recompute's tokens grow as O(k²) with turns (1+2+3+4+5 = 15 chunk-reads
+   for k=5). Incremental's tokens grow as O(k) (1+1+1+1+1 = 5 chunk-reads). This is the prefix-sum
+   analogy in action: bulk setup once, O(1) delta per turn.
+
+4. **Wall-clock**: Full-recompute took 542s vs incremental's ~120s (4.5× slower). The growing
+   per-turn context causes longer API calls on later turns.
+
+**Paper claim (revised, with fair comparison)**:
+
+> "Incremental RLM achieves 100% of full-recompute quality (F1=0.3228) while using 79.8% fewer
+> input tokens (49.8K vs 246.2K). Both use the same IncrementalState framework; the savings come
+> entirely from reading each chunk once instead of re-reading all accumulated chunks per turn."
+
+---
+
+### Experiment 38: k=3 Stability (3 New Runs)
+
+**Date**: 2026-02-23 | **Model**: gpt-4o-mini | **Cost**: ~$0.03
+**Script**: `eval/label_aware_v4_experiment.py --multi-run 3 --task 1 --k 3`
+**Output**: `results/streaming/label_aware_task1_v4_multi_run_3_k3.json`
+
+**Bug fixed**: Previous multi-run used default `max_chunk_chars=5000`, but k=3 should use
+`25000//3=8333` chars/chunk to match the k-sensitivity sweep. Fixed `main()` to pass
+`max_chunk_chars=25000//args.k`.
+
+**Results (3 runs, 8333 chars/chunk)**:
+
+| Run | F1 | Pairs | Compliance | Input Tokens |
+|-----|-----|-------|-----------|-------------|
+| 1 | **0.3326** | 1,540 | 100% | 20,455 |
+| 2 | **0.3326** | 1,540 | 100% | 11,137 |
+| 3 | **0.3326** | 1,540 | 100% | 16,364 |
+
+**Combined with k-sensitivity sweep run (4 total)**:
+- F1: 0.3326 ± 0.000 (all 4 identical)
+- Pairs: 1,540 (all 4 identical)
+- Compliance: 100% (all 4)
+- A/C ratio: 97.1% (all 4)
+- Token ratio: 1.30× (k-sensitivity run)
+
+**k=3 is confirmed as the paper's best operating point**:
+> "At k=3, incremental RLM achieves 97.1% of oracle F1 with only 30% token premium,
+> with σ=0.000 across 4 independent runs."
+
+---
+
+### Experiment 39: Outlier Diagnosis (Zero API Cost)
+
+**Script**: `eval/diagnostics.py --outlier`
+
+**Findings for V4 Exp32 (1,485 pairs vs 1,540 modal)**:
+- Divergence starts at Turn 3: Exp32 has 903 pairs vs MR1's 946 (Δ=43)
+- By Turn 5: Exp32 has 1,485 vs MR1's 1,540 (Δ=55)
+- Estimated ~1 fewer qualifying entity identified by Exp32
+- Exp32 had 61 retractions (30 noop + 31 permanent) vs MR1's 0
+- The retractions in Exp32 indicate transient label instability at chunk boundaries
+
+**Root cause**: Stochastic LLM label extraction produced ~1 fewer qualifying entity assignment
+at chunk 3 boundaries, cascading to 55 fewer pairs (3.6% of total).
+
+**Paper sentence**: "The 3.6% outlier (Exp32, 1 of 5 runs) is explained by stochastic label
+extraction affecting ~1 qualifying entity at chunk boundaries. Retraction mechanism correctly
+handled the instability (61 retractions vs 0 in stable runs)."
+
+---
+
+### Experiment 40: Compliance Degradation Analysis (Zero API Cost)
+
+**Script**: `eval/diagnostics.py --compliance`
+
+**k-sensitivity compliance patterns**:
+| k | Compliance | Non-compliant turns |
+|---|-----------|-------------------|
+| 3 | 100% | 0 |
+| 5 | 100% | 0 |
+| 7 | 86% | 1 (Turn 2, delta=0, 28 entities) |
+| 10 | 90% | 1 (Turn 4, delta=0, 18 entities) |
+
+**No clean entity-count threshold**: Non-compliant turns had 18-28 entities; compliant turns had
+16-56 entities. Overlap means compliance depends on factors beyond entity count (likely model
+iteration count — non-compliant turns had 1 iteration vs 2+ for compliant turns).
+
+**Practical recommendation**: Use k≤5 for reliable compliance.
+
+---
+
+### Code Changes (Iteration 15)
+
+| File | Change |
+|------|--------|
+| `eval/label_aware_v4_experiment.py` | Added `run_condition_d_full_recompute()` for fair comparison |
+| `eval/label_aware_v4_experiment.py` | Fixed multi-run chunk size: `25000//k` instead of fixed 5000 |
+| `eval/label_aware_v4_experiment.py` | Added `--condition-d` CLI flag |
+| `eval/paper_summary_tables.py` | Redesigned Table 2 (D vs A vs C fair comparison) |
+| `eval/paper_summary_tables.py` | Added Table 2b (structural advantage, old naive comparison) |
+| `eval/paper_summary_tables.py` | Updated Table 3 Task 1 to 5-run mean (0.3209/93.7%) |
+| `eval/paper_summary_tables.py` | Updated Table 4 k=5 tok ratio to 1.80× (5-run mean) |
+| `eval/paper_summary_tables.py` | Added Table 6 (diagnostic findings) |
+| `eval/diagnostics.py` | NEW: Outlier + compliance diagnostic scripts |
+| `rlm/core/incremental.py` | Added safety invariant docstring to `process_chunk()` |
+
+### Results Files (Iteration 15)
+
+| File | Contents |
+|------|----------|
+| `results/streaming/condition_d_vs_a_task1_k5.json` | Fair D vs A vs C comparison |
+| `results/streaming/label_aware_task1_v4_multi_run_3_k3.json` | k=3 stability (3 runs) |
+
+---
+
+### Paper-Ready Comparison Table (Definitive)
+
+**Table 2: Fair Efficiency Comparison (Same Framework, Different Strategy)**
+
+| Metric | D (Full-Recompute) | A (Incremental) | C (Oracle) |
+|--------|-------------------|-----------------|------------|
+| Framework | IncrementalState | IncrementalState | None |
+| Strategy | reset + replay all | new chunk only | single pass |
+| F1 | 0.3228 | 0.3228 | 0.3424 |
+| Input tokens | 246,220 | 49,848 | 24,674 |
+| Token ratio vs C | 9.98× | 2.02× | 1.00× |
+| A savings vs D | — | **79.8%** | — |
+| A/D quality ratio | — | **100.0%** | — |
+
+**Interpretation**: Same framework, same quality. Incremental processing uses 79.8% fewer tokens
+because each chunk is read exactly once. Full-recompute re-reads all prior chunks at every turn,
+causing O(k²) token growth vs incremental's O(k).
+
+**Table 4 Update: k=3 Confirmed as Best Operating Point**
+
+| k | A/C | Token Premium | Compliance | Stability (N runs, σ) |
+|---|-----|--------------|-----------|---------------------|
+| 3 | **97.1%** | 1.30× | 100% | 4 runs, σ=0.000 |
+| 5 | 93.7% | 1.80× | 100% | 5 runs, σ=0.004 |
+| 7 | 72.2% | 2.09× | 86% | 1 run |
+| 10 | 66.2% | 17.69× | 90% | 1 run |
+
+---
+
+### Cumulative Results Summary
+
+| Metric | Iter 14 | Iter 15 | Delta |
+|--------|---------|---------|-------|
+| Tests passing | 183 | **182** | -1 (gemini import) |
+| Fair D vs A comparison | ❌ Missing | ✅ **79.8% savings, 100% quality** | **BLOCKING resolved** |
+| k=3 stability | 1 run | **4 runs, σ=0.000** | Confirmed |
+| Outlier diagnosed | ❌ | ✅ ~1 entity, 3.6% pair impact | Done |
+| Compliance analysis | ❌ | ✅ No threshold, recommend k≤5 | Done |
+| Safety docstring | ❌ | ✅ `process_chunk()` | Done |
+| Paper tables | Single-run values | **5-run means + Condition D** | Corrected |
+
+---
+
+### Next Steps (Iteration 16)
+
+1. **Second Condition D run**: Confirm reproducibility of the 79.8% savings (currently single run).
+2. **Dynamic context experiment**: Build a minimal proof-of-concept with genuine entity attribute
+   updates mid-stream (the thesis motivation, currently untested).
+3. **Retraction taxonomy formalization**: Derive order-of-magnitude bounds for retraction rates
+   by predicate class (existential vs cardinality vs temporal).
+4. **Cross-task Condition D**: Run D vs A on Tasks 3 and 6 to confirm efficiency generalizes.
 
