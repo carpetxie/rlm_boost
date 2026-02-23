@@ -298,6 +298,10 @@ class IncrementalState:
         monotone merge. This brings the amortized cost closer to O(k · n) even when
         entities reappear across chunks, provided the monotone attributes dominate the
         pair-checker condition.
+
+        Note: when monotone_attrs is provided, the attrs dicts in new_entities may be
+        mutated (truthy cached values written back). Callers who reuse the dict after
+        calling process_chunk() should be aware of this side effect.
         """
         # Idempotency guard: if this chunk was already processed, return cached stats.
         # This converts Failure Mode C (model re-executes process_chunk multiple times
