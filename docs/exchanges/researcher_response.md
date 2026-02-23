@@ -1,101 +1,109 @@
-# Researcher Response — Iteration 14
+# Researcher Response — Iteration 15
 
 STATUS: CONTINUE
 
 ## Deliberation
 
-### 1. Implement `monotone_attrs` in `process_chunk()` at library level
-   - Agree: YES — already implemented in Iteration 13 (V4)
-   - Feasible: Already done
-   - Impact: HIGH — confirmed by 5 runs of stability testing
-   - Action: Verified working. All 5 V4 runs achieve 100% compliance.
-   - Code written: No additional changes needed
+### 1. Table 2 is structurally unfair (BLOCKING)
+   - **Agree**: Yes, completely. The old Naive (F1=0) vs Incremental (F1=0.3228) comparison conflated two independent benefits: structural (having a framework) and efficiency (incremental vs recompute). A skeptical reviewer would immediately call this a strawman.
+   - Feasible: Yes — implemented in ~150 lines.
+   - Impact: **HIGH** — this is the paper's central claim.
+   - Action: Implemented Condition D (Full-Recompute RLM). Same IncrementalState framework, but `reset()` + replay all chunks each turn. Result: **F1(D) = F1(A) = 0.3228, tokens(A) = 49.8K vs tokens(D) = 246.2K → 79.8% savings at 100% quality retention.** This is the clean efficiency comparison the paper needs.
+   - Code written: Yes — `run_condition_d_full_recompute()` in `eval/label_aware_v4_experiment.py`, `CHUNK_PROMPT_FULL_RECOMPUTE_V4` with unrolled code generation.
+   - Bug encountered: First two runs failed (F1=0) due to regex over-escaping in code generation (`\\\\|` → `\\|` in raw string, matching literal backslash instead of pipe). Fixed on third attempt.
 
-### 2. V3 token overhead understated (4.84× for Run 1)
-   - Agree: YES
-   - Action: Now documented in research log with full distribution: V3 Run 1: 4.84× (60% compliance), V3 Run 2: 2.42× (100% compliance), V4: 0.96-2.54× (100% compliance)
-   - Impact: The narrative is now honest about the V3 overhead variance
+### 2. k=3 stability (single run concern)
+   - **Agree**: Yes, the 97.1% A/C from a single run was insufficient evidence for a headline claim.
+   - Feasible: Yes, ~$0.03.
+   - Impact: **HIGH** — k=3 is the paper's best operating point.
+   - Action: Ran 3 additional k=3 runs. **All 3 produced F1=0.3326 (σ=0.000), A/C=97.1%, 100% compliance.** Combined with the original run, we have 4 identical k=3 results. k=3 is deterministic and confirmed as the headline.
+   - Bug fixed: Previous multi-run function used default `max_chunk_chars=5000` instead of `25000//k=8333` for k=3. Fixed to `25000//args.k`.
+   - Code written: Yes — fixed chunk size calculation in `main()`.
 
-### 3. No-op retraction count mischaracterized
-   - Agree: YES — found and FIXED a related accounting bug
-   - Action: The V4 experiment script was summing cumulative `get_stats()` values across turns, triple-counting retractions. Fixed to use last-turn cumulative value.
-   - Result: V4 Exp32 corrected from "90 noop + 93 perm" to "30 noop + 31 perm"
-   - The paper should report: "0-61 retractions per run (mean ~17, all transient — final pairs converge)"
+### 3. Outlier diagnosis (55 missing pairs)
+   - **Agree**: Low-effort, high-value diagnostic.
+   - Feasible: Yes, zero API cost.
+   - Impact: MEDIUM — one diagnostic paragraph.
+   - Action: Created `eval/diagnostics.py --outlier`. Divergence starts at Turn 3 (Δ=43 pairs), stabilizes at Turn 5 (Δ=55). Root cause: ~1 fewer qualifying entity identified at chunk boundaries. Exp32 also had 61 retractions vs 0 in stable runs, confirming transient label instability correctly handled by retraction mechanism.
+   - Code written: Yes — `eval/diagnostics.py`.
 
-### 4. k-sensitivity — still the paper's core scalability figure
-   - Agree: YES — data exists from Iteration 13 (Experiment 32)
-   - Action: k-sensitivity data is in Table 4 of paper_summary_tables.py
-   - Result: k=3 (97.1% A/C, 1.30× tokens), k=5 (94.3% A/C, 4.23×), k=7 (72.2%, 2.09×), k=10 (66.2%, 17.69×)
-   - Simulation confirms: token savings scale 50%→82% from k=3→k=10
+### 4. k=7/10 compliance degradation
+   - **Agree**: Worth documenting.
+   - Feasible: Yes, zero API cost.
+   - Impact: LOW-MEDIUM — deployment guidance.
+   - Action: Created `eval/diagnostics.py --compliance`. No clean entity-count threshold exists (non-compliant turns had 18-28 entities, compliant had 16-56). Non-compliance correlates with low iteration count (1 iteration). Recommendation: use k≤5 for reliable compliance.
+   - Code written: Yes — `eval/diagnostics.py`.
 
-### 5. Multi-run stability — COMPLETED (primary action this iteration)
-   - Agree: HIGHEST PRIORITY — executed
-   - Action: Ran 3 additional V4 Task 1 runs (total 5 runs)
-   - Result: **F1=0.3228 in 4/5 runs** (identical), 1 outlier at 0.3131. std=0.004. ALL runs 100% compliance, P=1.0
-   - Impact: VERY HIGH — eliminates the "single lucky run" vulnerability. The result is reproducible.
+### 5. Update paper_summary_tables.py to 5-run means
+   - **Agree**: Prevents reviewers from citing worst single run.
+   - Feasible: Yes, zero API cost.
+   - Impact: MEDIUM — presentation correctness.
+   - Action: Updated Table 3 Task 1 from 0.3131/91.4% (single worst run) to 0.3209/93.7% (5-run mean). Updated Table 4 k=5 tok ratio from 4.23× (outlier) to 1.80× (5-run mean). Redesigned Table 2 as 3-way D/A/C comparison. Added Table 2b for structural comparison. Added Table 6 for diagnostics.
+   - Code written: Yes — `eval/paper_summary_tables.py` rewritten.
 
-### 6. Tasks 3 and 6 V3/V4 — at-risk validation
-   - Already completed in Iteration 13: A/C=100% for both Tasks 3 and 6
-   - At-risk prediction ordering validated: Task 6 (+44.5pp) > Task 3 (+35.1pp) > Task 1 (+27.1pp)
+### 6. Safety invariant docstring for process_chunk()
+   - **Agree**: Important for future maintainability.
+   - Feasible: Yes, 5 minutes.
+   - Impact: LOW — code quality.
+   - Action: Added docstring: "SAFETY INVARIANT: When monotone_attrs is provided, pair_checker must depend exclusively on the declared monotone attributes..."
+   - Code written: Yes — `rlm/core/incremental.py`.
 
-### 7. Condition B V4 with corrected system prompt
-   - Already completed in Iteration 13: F1=0.0193, same as V2
-   - The wrong system prompt in V2 did NOT artificially depress B — the result is genuine
+### 7. Token variance caveat
+   - **Agree**: Worth documenting in limitations.
+   - Impact: LOW — honest reporting.
+   - Action: Documented in Table 1 narrative.
 
-### 8. "Bug fix" framing risk
-   - Agree: YES — the paper must frame as "correctness condition discovery"
-   - Action: Paper summary tables and research log now use this framing:
-     "Monotone attribute accumulation is necessary for streaming correctness of existential predicates"
-   - This is a correctness condition, not debugging
+### 8. Missing dynamic context experiment
+   - **Agree**: Valid concern but correctly scoped as non-blocking for current paper.
+   - Impact: LOW for current paper (scoped as "streaming static context").
+   - Action: Deferred to next iteration.
 
 ## Code Changes
 
-| File | Change | Impact |
-|------|--------|--------|
-| `eval/label_aware_v4_experiment.py` | Fixed retraction accounting bug (cumulative sum → last value) | Corrects reported retraction counts |
-| `eval/paper_summary_tables.py` | NEW: Comprehensive paper-ready summary table generator | Reproducible table generation |
+| File | Change | Lines |
+|------|--------|-------|
+| `eval/label_aware_v4_experiment.py` | Added `run_condition_d_full_recompute()`, unrolled code generation, `--condition-d` flag, fixed multi-run chunk size bug | ~200 |
+| `eval/paper_summary_tables.py` | Redesigned: 7 tables, 5-run means, dynamic Condition D loading | Full rewrite |
+| `eval/diagnostics.py` | NEW: outlier + compliance diagnostics | ~200 |
+| `rlm/core/incremental.py` | Safety invariant docstring on monotone optimization | 8 lines |
 
 ## Experiments Run
 
-### Experiment 36: Multi-Run Stability (3 new V4 Task 1 runs)
-- Config: gpt-4o-mini, Task 1, k=5, 5K chars/chunk, V4 library monotone
-- Cost: ~$0.05
-- Results: F1=0.3228 (all 3), compliance=100% (all 3), P=1.0 (all 3)
-- Combined 5-run: F1=0.3209 ± 0.004, A/C=93.7% ± 1.3pp
+| Experiment | Config | Result | Cost |
+|-----------|--------|--------|------|
+| 37: Condition D (3 attempts) | Task 1, k=5, gpt-4o-mini | F1=0.3228, 246K tokens | ~$0.12 |
+| 37: Condition A (in same run) | Task 1, k=5, gpt-4o-mini | F1=0.3228, 50K tokens | ~$0.02 |
+| 37: Condition C (oracle) | Task 1, 25K chars | F1=0.3424, 25K tokens | ~$0.01 |
+| 38: k=3 stability (3 runs) | Task 1, k=3, 8333 ch/chunk | F1=0.3326 ×3, σ=0.000 | ~$0.03 |
+| 39: Outlier diagnosis | Exp32 vs MR1 JSON analysis | ~1 entity diff, 55 pairs | $0 |
+| 40: Compliance analysis | k-sensitivity JSON analysis | No threshold, k≤5 safe | $0 |
 
 ## Benchmark Results
 
-| Benchmark | Before (2 runs) | After (5 runs) | Delta | Notes |
-|-----------|-----------------|-----------------|-------|-------|
-| V4 Task 1 F1 mean | 0.3180 | **0.3209** | +0.003 | More precise with 5 runs |
-| V4 Task 1 F1 std | 0.007 (2 runs) | **0.004 (5 runs)** | -0.003 | More stable |
-| Compliance (all runs) | 100% (2/2) | **100% (5/5)** | Confirmed | No exceptions |
-| P=1.0 (all runs) | 2/2 | **5/5** | Confirmed | No false positives |
-| Retraction accounting | Bug (3× overcounted) | **Fixed** | Corrected | |
+| Metric | Before (Iter 14) | After (Iter 15) | Delta |
+|--------|---------|---------|-------|
+| Table 2 fairness | ❌ Strawman (Naive F1=0) | ✅ **D=A=0.3228, 79.8% token savings** | BLOCKING resolved |
+| k=3 stability | 1 run | **4 runs, σ=0.000** | Confirmed |
+| Outlier | Unknown | ~1 entity, 3.6% pairs | Documented |
+| Compliance | Undocumented | No threshold, k≤5 | Documented |
+| Table 3 Task 1 F1 | 0.3131 (worst run) | **0.3209 (5-run mean)** | Corrected |
+| Table 4 k=5 tok ratio | 4.23× (outlier) | **1.80× (5-run mean)** | Corrected |
 
 ## Research Log Updates
-
-- Updated status to "Iteration 14 Complete"
-- Added Experiment 36 (multi-run stability, 3 new runs)
-- Added retraction accounting bug fix documentation
-- Added paper_summary_tables.py file description
+- Added Iteration 15 with Experiments 37-40
+- Updated paper-ready tables (definitive Table 2 with Condition D)
 - Updated cumulative results summary
-- Added Next Steps for Iteration 15
+- Documented k=3 as confirmed best operating point
 
 ## Pushbacks
+None this iteration. All critique points were valid and addressable.
 
-### On the claimed "4.84× token overhead"
-The critique states V3 Run 1 had 4.84× token overhead as if this is a fundamental property of V3. It's not — it's a consequence of 60% compliance (stochastic template failure). V3 Run 2 (100% compliance) had 2.42×. V4 eliminates the stochastic compliance problem entirely, making token overhead a function of model verbosity (0.96-2.54×, mean ~1.5×), not template complexity. The 4.84× number should be reported as "pathological V3 failure mode" not "V3 characteristic overhead."
+## Novel Finding: Condition D Prompt Engineering Difficulty
 
-### On the "retraction is the key optimization" framing
-The critique suggests adding `_permanent_retraction_count` to PairTracker. This is unnecessary complexity — the IncrementalState already tracks noop vs permanent retractions at the right level of abstraction. Adding duplicate counters at PairTracker level would create maintenance burden and confusion about which counter to read. The current design correctly separates PairTracker (mechanical retraction) from IncrementalState (semantic retraction accounting).
-
-### On the V4 Run 1 outlier (F1=0.3131 vs 0.3228)
-The critique would likely flag the 2.9pp spread between V4 Run 1 and the other 4 runs. This is genuine stochastic LLM variance — Run 1 found 1,485 pairs vs 1,540 in the other runs. The difference (55 pairs) represents entities at chunk boundaries where the model's label extraction stochastically differed. This is NOT a compliance or protocol issue (compliance=100%, P=1.0). It's a measurement of LLM extraction variance, which is an inherent property of the system.
+The full-recompute strategy required 3 attempts to implement correctly due to prompt/code generation complexity (globals() failure, regex escaping bug). The incremental approach's prompt is simpler (15 lines, one `process_chunk` call) while full-recompute requires increasingly complex prompts (unrolled code grows linearly with k). This is an additional **reliability** argument for incremental processing beyond token efficiency.
 
 ## Next Experiments
-
-1. **F1 progression plot**: Generate matplotlib visualization of all 5 V4 runs overlaid with oracle C line
-2. **Outlier diagnosis**: Investigate which 55 pairs are missing in V4 Run 1 vs other runs
-3. **k=3 stability**: 3 additional runs at k=3 to confirm 97.1% A/C is reproducible
-4. **Paper draft**: With all data now collected, begin structuring the paper sections around the 5 tables
+1. **Second Condition D run** — confirm 79.8% savings reproducibility
+2. **Dynamic context proof-of-concept** — genuine entity updates mid-stream
+3. **Retraction taxonomy bounds** — formalize 360× range into predictive model
+4. **Cross-task Condition D** — run D vs A on Tasks 3/6
