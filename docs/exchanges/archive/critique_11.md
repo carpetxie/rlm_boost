@@ -6,22 +6,25 @@ STATUS: CONTINUE
 
 ## Overall Assessment
 
-Iteration 10 delivered its commitments cleanly: label-aware check_pair is implemented and ran, prune_count telemetry is confirmed working (0→1 transition at Turn 4 matches token evidence), and the AST scope fix for `_extract_assigned_names` is correct. The P=1.0 finding — zero false positives across all turns and conditions under actual task conditions — is the paper's strongest empirical result and is publishable as-is. However, close inspection of `label_aware_task1_results.json` against `split_context_by_users()` reveals two previously unidentified issues that structurally compromise the core A/C comparison: (1) Conditions A and C are evaluated on **different slices of the labeled corpus** — A samples shallowly across all 96K chars while C covers the first 25K contiguously — making their F1 comparison neither fair nor interpretable as "same budget, different strategies"; and (2) in Turn 1 the model advanced `chunks_processed` to 2 (processing a phantom chunk 1 with empty entities alongside chunk 0), causing Turn 2 to be non-compliant by deduplication. Together, these mean the F1=0.1695 vs F1=0.3424 comparison (49.5% of oracle) cannot yet be cited as the paper's headline without a targeted experiment redesign.
+Iteration 15 resolves the most critical blocking issue from the prior critique: Condition D (full-recompute with same IncrementalState framework) now provides a structurally fair efficiency comparison, showing **79.8% token savings at 100% quality retention**. Combined with k=3 stability (σ=0.000 across 4 runs), the paper's central claim is now defensible: incremental processing achieves near-oracle quality (97.1% at k=3) with substantial token savings against a fair baseline. However, the Condition D result rests on a **single run**, and two significant gaps remain: (1) no second Condition D run to confirm the 79.8% headline, and (2) the paper still tests only static context chunked sequentially — the thesis motivation (dynamic context) has zero live experiments after 15 iterations.
 
 ---
 
 ## Reflection on Prior Feedback
 
 **Resolved — not re-raising:**
-- Label-aware check_pair implemented and run. Done.
-- prune_count telemetry confirmed via direct attribute access; 0→1 at Turn 4. Done.
-- `_extract_assigned_names` uses `tree.body` not `ast.walk()`. Fixed and unit-tested. Done.
-- `EntityCache.get_from_chunk()` docstring corrected; `get_new_in_chunk()` added. Done.
-- `PairTracker.clear_retracted()` method added. Done.
-- `_build_iteration_summary` chunk_index tracking via `_PROCESS_CHUNK_RE`. Done.
-- Condition B token anomaly attributed to ORACLE_PROMPT_SINGLE template. Accepted.
+- Table 2 structural fairness: Condition D implemented and run. Done.
+- k=3 single-run concern: 4 runs, σ=0.000. Done.
+- Outlier diagnosis (55 pairs): ~1 entity boundary effect, 3.6% impact. Done.
+- Compliance degradation: analyzed, no threshold found, k≤5 recommendation. Done.
+- Paper tables with 5-run means: `paper_summary_tables.py` updated. Done.
+- Safety invariant docstring: added to `process_chunk()`. Done.
+- Token variance caveat: documented. Done.
 
-**Pushback accepted:** The critique's prediction that "F1 should rise toward 0.716" conflated proxy-condition ceiling (0.716) with actual-task ceiling at 25K labeled chars (0.3424). Researcher is correct. The proxy ceiling is not the actual ceiling. This point is dropped.
+**Accepted and not re-raising:**
+- Dynamic context experiment: correctly deferred as non-blocking for current paper scope. However, I will flag its strategic importance below.
+- Lazy retraction: correctly deferred post-V4.
+- σ-parameterized cost model modest improvement: accepted as publishable with caveats.
 
 ---
 
@@ -29,207 +32,196 @@ Iteration 10 delivered its commitments cleanly: label-aware check_pair is implem
 
 | Criterion | Score | Delta | Comment |
 |-----------|-------|-------|---------|
-| Novelty | 7/10 | +0 | P=1.0, REPL-state-as-correctness-ground-truth, and retraction taxonomy are genuinely novel. However, novelty claims rest on a comparison that has a coverage non-equivalence flaw. Fix the experiment first, then the novelty claims are independently defensible. |
-| Technical Soundness | 6/10 | −1 | New: Conditions A and C see different 25K-char slices of the 96K labeled corpus (A: breadth across full corpus; C: depth in first 25K). This is a structural correctness issue in the experiment design, not a minor bug. The comparison as reported is not internally valid. |
-| Benchmark Performance | 6/10 | −1 | F1=0.1695 (A) vs 0.3424 (C) gives "49.5% of oracle," but this comparison is confounded by coverage non-equivalence. Condition A likely achieves substantially higher F1 when redesigned with sequential chunks from the same first 25K chars. Cannot cite 49.5% honestly without the fix. |
-| Scalability | 6/10 | +0 | N=231, 3 tasks, 1 model. Turn 1 phantom-chunk behavior (model processes 2 chunks in one turn) is uncharacterized and could worsen at higher k. |
-| Research Maturity | 7/10 | +0 | P=1.0 is paper-worthy. The A/C comparison needs one targeted experiment redesign. With that fix, this moves to 8/10. |
+| Novelty | 7/10 | +0 | Monotone accumulation correctness condition, retraction taxonomy, at-risk fraction predictor, library-vs-template principle are genuinely novel. All demonstrated on single corpus. Dynamic context contribution remains aspirational. |
+| Technical Soundness | 8/10 | +0 | Condition D provides fair comparison. k=3 deterministic. V4 library fix eliminates stochastic compliance. One concern: Condition D is single-run with a suspicious Turn 2 token anomaly (see below). |
+| Benchmark Performance | 8/10 | +0 | k=3: 97.1% A/C at 1.30× token cost. k=5: 93.7% mean with σ=1.3pp. P=1.0 across all. Condition D confirms 79.8% savings at 100% quality. |
+| Scalability | 6/10 | +0 | k-sensitivity exists (3,5,7,10). Condition D provides real cost comparison. Still single-corpus (N=231), single-model. k=7/10 compliance degradation bounds deployment. |
+| Research Maturity | 7/10 | +0 | All blocking issues resolved. Paper tables comprehensive. Missing: Condition D replication, cross-task D comparison, and framing decision on "dynamic" vs "incremental streaming." |
 
 ---
 
 ## Architecture Review
 
-### Critical New Finding 1: Data Slice Non-Equivalence Invalidates the A/C Comparison
+### The `process_chunk()` Code Is Sound
 
-Inspecting `split_context_by_users()` (lines 100–124 of `eval/rlm_pipeline_experiment.py`) and the label-aware results together reveals a fundamental mismatch between what Conditions A and C actually process.
+Reviewed `rlm/core/incremental.py` end-to-end. The implementation is correct:
+- Monotone merge logic (lines 342-360) correctly preserves truthy cached values and detects no-op updates
+- No-op update detection (lines 356-360) correctly skips `updated_ids` when all monotone attrs unchanged
+- Retraction accounting (lines 406-426) properly distinguishes noop vs permanent retractions
+- Idempotency guard (lines 302-315) returns cached stats on repeated calls
+- `checked_in_updated_sweep` deduplication (lines 437-456) prevents double-counting
 
-The labeled context is **96,689 characters** — roughly 3× the plain context — because each record gains a `|| Label: [cat]` field. When `split_context_by_users(labeled_context, num_chunks=5)` runs:
+**Subtle mutation issue**: In the monotone merge (line 351), `attrs[attr] = old_val` mutates the caller's `new_entities` dict. This is safe in current usage but will surprise future callers who reuse the dict after calling `process_chunk()`. Worth a note in the docstring: "Note: when monotone_attrs is provided, the attrs dicts in new_entities may be mutated (truthy cached values written back)."
 
-1. It finds all user-boundary positions across the 96K corpus (231 positions)
-2. Divides into 5 groups of ~46 users each, giving ~19K chars per group
-3. Each group is truncated to `max_chunk_chars=5000`
+### Condition D Turn 2 Token Anomaly — Investigate Before Claiming 79.8%
 
-**Condition A's five chunks therefore cover**:
-- Chunk 0: chars ~0–5K (first 5K of users 1–46)
-- Chunk 1: chars ~19K–24K (first 5K of users 47–92)
-- Chunk 2: chars ~38K–43K (first 5K of users 93–138)
-- Chunk 3: chars ~57K–62K (first 5K of users 139–185)
-- Chunk 4: chars ~76K–81K (first 5K of users 186–231)
+From `condition_d_vs_a_task1_k5.json`, Condition D's per-turn input tokens:
 
-**Condition C's oracle covers**: `labeled_context[:25000]` — the first 25K chars of the corpus, which spans roughly users 1–60 and overlaps only with Chunk 0 (and slightly into the beginning of Chunk 1's region).
+| Turn | D Input Tokens | D Iteration Count |
+|------|---------------|-------------------|
+| 1 | 37,005 | 9 |
+| 2 | **2,052** | **1** |
+| 3 | 26,233 | 6 |
+| 4 | 73,059 | 9 |
+| 5 | 107,871 | 9 |
 
-These are **entirely different slices**. Condition A covers all 231 users shallowly (5K chars per user group). Condition C covers ~60 users deeply (all their instances within the first 25K chars). The two conditions have **different coverage ceilings** — not the same 1,653 pairs.
+Turn 2 used only **2,052 tokens and 1 iteration** — suspiciously low for replaying chunks 0+1. Expected: approximately 2× Turn 1's tokens since Turn 2 replays both chunks. The 1-iteration count suggests the model may have terminated early (e.g., after reset only, or after replaying just chunk 0 without chunk 1).
 
-The observed numbers confirm this mechanically:
-- Condition C: 113 entities, 58 qualifying, 1,653 pairs (all from chars 0–25K)
-- Condition A: 741 pairs from 5 disjoint windows across the 96K corpus
+**However**, the pair counts tell a different story: Turn 2 shows 496 pairs, which matches Condition A's Turn 2 (496 pairs). So the OUTPUT is correct. The low token count might reflect the model efficiently executing the unrolled replay in a single iteration. But this needs verification.
 
-The "49.5% of oracle" headline is therefore a comparison of two different tasks, not two different strategies on the same data. Reviewers who inspect the chunking logic will catch this immediately.
+**Required check**: On the second Condition D run, log `_incremental.get_stats()["chunks_processed"]` after each turn. If Turn 2 shows chunks_processed=2, the replay is correct and the low token count reflects efficient execution. If chunks_processed<2, the replay is incomplete and the 79.8% figure may be inflated.
 
-**The fix requires one code change** in `run_label_aware_condition_a()`:
+### Condition A Token Variance in D-vs-A Experiment
 
-```python
-# CURRENT (wrong): split full 96K corpus into 5 user groups, truncate each to 5K
-chunks = split_context_by_users(labeled_context, num_chunks)
-chunks = [c[:max_chunk_chars] for c in chunks]
+In the Condition D experiment file, Condition A used 49,848 total input tokens (2.02× vs C). But the 5-run mean is 43,434 (1.80×). For the paper, report:
+- Single-experiment D-vs-A comparison: 79.8% savings (both from same session)
+- Sensitivity check using 5-run mean A: 246,220 vs 43,434 = 82.4% savings (even stronger)
 
-# FIXED: split only the first 25K chars into 5 sequential windows
-context_window = labeled_context[:num_chunks * max_chunk_chars]   # same 25K as oracle C
-step = max_chunk_chars  # 5000
-chunks = [context_window[i*step : (i+1)*step] for i in range(num_chunks)]
-```
-
-With this fix, A and C see identical content and the comparison measures exactly what it claims: incremental streaming vs single-pass oracle on the same data.
-
-### Critical New Finding 2: Turn 1 Phantom Chunk (Model Processes Two Chunks in One Turn)
-
-From the actual `label_aware_task1_results.json`:
-
-| Turn | Prompt chunk_idx | chunks_processed after | Compliant (current check) |
-|------|-----------------|----------------------|--------------------------|
-| 1 | 0 | **2** | True (wrong: jumped by 2) |
-| 2 | 1 | 2 | False (dedup blocked) |
-| 3 | 2 | 3 | True |
-| 4 | 3 | 4 | True |
-| 5 | 4 | 5 | True |
-
-Turn 1's `pair_checks_total=1,907` at `chunks_processed=2` reveals the model ran `process_chunk(0, entities, ...)` AND `process_chunk(1, {}, ...)` in consecutive REPL iterations within a single completion. The second call created chunk_idx=1 in `_processed_chunk_indices` with empty entities. When Turn 2 arrived with chunk 1's actual data and called `process_chunk(1, entities, ...)`, the deduplication guard returned cached stats (empty) and the incremental state for chunk 1 was permanently polluted with zero entities.
-
-The current compliance metric `chunks_processed > prev_chunks_processed` accepts a jump of 2 as compliant. The correct metric is `chunks_processed == prev_chunks_processed + 1`. Under the correct metric, **Turn 1 is also non-compliant** (advanced by 2), giving a true compliance rate of **60%** (Turns 3, 4, 5 correctly advance by exactly 1), not the reported 80%.
-
-Additionally, chunk 1's real data was **never processed** — the incremental state has 0 entities for chunk 1. This artificially reduces Condition A's coverage and F1. The total pairs found (741) would be higher if chunk 1 had been processed correctly.
-
-This is a prompt engineering issue: `max_iterations=6` lets the model call `process_chunk` with arbitrary chunk indices across REPL iterations. The fix is to restrict the template: add "Call `_incremental.process_chunk({chunk_idx}, entities, pair_checker=check_pair)` EXACTLY ONCE. Do not call process_chunk with any other chunk index in this turn."
-
-### Finding 3: Turn 4 Token Spike (45,275 tokens) — Still Mechanistically Unexplained
-
-prune fired at Turn 4 (prune_count: 0→1), yet input tokens jumped from 4,564 (Turn 3) to **45,275** (Turn 4), then dropped to 6,819 (Turn 5). Pruning should reduce history and thus reduce tokens. The 10× spike is the opposite.
-
-Two hypotheses:
-1. **Many LM iterations within Turn 4**: If Turn 4 ran 6 LM iterations (max_iterations=6) while Turn 3 ran ~2, total token usage is 3× higher even if each individual call is smaller. `_extract_tokens()` aggregates across all iterations in a completion.
-2. **The prune summary itself is large**: `_build_iteration_summary()` could produce a large summary if many code blocks and outputs are included, partially or fully offsetting the compression.
-
-`run_label_aware_condition_b()` has `iteration_count_proxy = 0` that is never populated — the promised per-completion iteration logging was not implemented. This is a code gap that must be closed to resolve the spike.
+Both framings support the efficiency claim.
 
 ---
 
 ## Novelty Assessment
 
-### Defend These — They're Independently Robust
+### Three Genuine Contributions
 
-**P=1.0 (zero false positives)**: This holds regardless of the A/C coverage non-equivalence. Every predicted pair in Condition A was a true gold pair at every turn. This is a precision guarantee that survives the experiment redesign — the data slice changes which pairs are available but doesn't change whether the label-aware checker is correct. This should be the lead result.
+1. **Monotone accumulation as a correctness condition**: The observation that "at least one" predicates require monotone attribute merging is specific to the LLM-as-programmer setting (where per-chunk attribute extraction is stochastically incomplete). The at-risk fraction predictor generalizes this to a pre-experiment diagnostic. This is not in the incremental view maintenance literature.
 
-**REPL-state as correctness ground truth**: The deduplication guard in `_processed_chunk_indices` provides O(1) idempotency. Turn 2's non-compliance (dedup blocked the phantom chunk from being re-processed correctly) and the post-pruning continuity at Turn 4–5 both confirm that REPL-level Python state is the ground truth, not message history. This architectural insight generalizes beyond OOLONG-Pairs.
+2. **Library-vs-template design principle**: The V3→V4 progression (60% stochastic → 100% deterministic compliance) is empirical evidence for a general principle in LLM-in-the-loop systems. Relevant beyond RLM.
 
-**Retraction taxonomy and temporal asymmetry**: The 44–15,824 range (360×) in retraction counts across task types, mechanistically confirmed for temporal asymmetry (bidirectional vs monotonic invalidation), is empirically original. No prior work characterizes incremental computation overhead as a function of constraint type.
+3. **Retraction taxonomy**: 360× range across task types, mechanistic explanation (selectivity + temporal direction), empirical validation across 11 tasks. Novel characterization.
 
-### What the Redesigned Experiment Adds
+### The Missing Piece: Dynamic Context
 
-With sequential chunking, the A/C comparison becomes:
-- Same 25K chars, same entities, same qualifying set (58 users), same ceiling (1,653 pairs)
-- F1 gap measures only: latency (A sees data incrementally, C sees all at once) + inter-chunk accumulation effects
-- If A achieves ≥ 0.28 F1 (≥80% of oracle): strong headline (near-oracle streaming quality)
-- If A achieves ~0.22 F1 (same as current k=1): reveals that per-chunk coverage (not total coverage) is the binding constraint, and increasing chunk size is more valuable than increasing k
+After 15 iterations, every experiment uses OOLONG-Pairs chunked sequentially. The paper's thesis motivation is "real-world context is dynamic," but the evidence is "we can process static context incrementally."
 
-Either result is a finding. The P=1.0 guarantee is the novelty; the F1 level quantifies the coverage-vs-accuracy tradeoff.
+**Strategic recommendation**: One minimal 3-turn experiment with genuine entity attribute changes mid-stream ($1-2, 2 hours) would:
+- Demonstrate the retraction mechanism handles real updates (not just stochastic re-appearances)
+- Provide the "dynamic" evidence the thesis needs
+- Transform the paper's "Discussion/Future Work" into "We demonstrate dynamic handling in a controlled setting and leave full evaluation to future work"
+
+**Without this**: Scope the paper as "Incremental Computation for Sequential Context Processing in LLM Programs" and frame dynamic context as future work. The contribution is still substantial — just honestly scoped.
+
+### What Would Push Novelty to 8/10
+
+Formalize the retraction taxonomy into **predictive bounds**. Currently descriptive (360× range). Derive: "Given predicate class C ∈ {existential, cardinality, temporal-before, temporal-after} and entity selectivity σ, retraction rate r(C, σ, k) is O(f(σ)) for existential and O(g(σ)) for cardinality." Even order-of-magnitude bounds would turn descriptive data into a predictive tool.
+
+---
+
+## 3rd-Party Clarity Test
+
+### Table 2 (D vs A vs C) — PASS ✅ (with replication caveat)
+
+| What's compared | Why it's fair | Why it matters |
+|----------------|--------------|----------------|
+| D = same IncrementalState, reset+replay all chunks each turn | Isolates efficiency from framework benefit | Shows 79.8% savings is from incremental strategy, not from having a framework |
+| A = same IncrementalState, new chunk only | Identical setup except strategy | Achieves 100% of D's F1 quality |
+| C = single-pass oracle | Quality upper bound | A achieves 94.3% of C |
+
+A skeptical engineer would understand this comparison. **Caveat**: single Condition D run. For a paper, N≥2 with consistent results is the minimum bar. Currently **near-blocking** — structurally correct but statistically thin.
+
+### Table 1 (Cross-Version V2→V4) — PASS ✅
+
+Clear progression with honest reporting of V3 stochastic behavior. V4 5-run statistics with mean±std.
+
+### k=3 Stability — PASS ✅
+
+4 runs, σ=0.000, 97.1% A/C, 100% compliance. The paper's strongest single data point.
+
+### Cross-Task V4 (Table 3) — PASS with caveat ✅
+
+Tasks 3/6 A/C=100%, at-risk prediction validated. **Caveat**: single-run each. Second run for each (~$0.04 total) would be cheap insurance.
+
+### Table 2b (Naive vs Incremental) — CORRECTLY LABELED ✅
+
+Researcher correctly separates this as "structural advantage" table, not efficiency comparison. Good framing.
 
 ---
 
 ## Experiment Critique
 
-### Priority 1: Redesigned A/C Label-Aware (Mandatory, ~$5, 2 hrs)
+### Condition D Replication (HIGHEST PRIORITY)
 
-The single experiment that resolves the paper's central claim. Change `run_label_aware_condition_a()` to use sequential 5K windows from the same first 25K labeled chars that oracle C sees. Simultaneously:
-- Fix the compliance metric to `chunks_processed == prev_chunks_processed + 1`
-- Add phantom-chunk detection: warn if `chunks_processed > prev_chunks_processed + 1`
-- Add per-completion iteration count: log `len(completion.iterations)` or equivalent
-- Add the one-sentence prompt fix to prevent phantom chunk calls
-- Rerun all three conditions (A, B, C) for Task 1
+The 79.8% savings headline is from one run. The Turn 2 token/iteration anomaly (2,052 tokens, 1 iteration) warrants investigation. Run Condition D again with explicit `chunks_processed` verification per turn.
 
-Expected outcome: Condition A F1 improves substantially. If P=1.0 still holds (expected, since the checker is correct regardless of data slice), the paper has: "Incremental RLM achieves P=1.0 and F1=[X]% of oracle on Task 1, processing the same 25K-char context as oracle in 5 streaming turns of 5K chars each."
+This is $0.06 and 30 minutes. It's the difference between "the paper's headline is confirmed" and "the paper's headline is unverified."
 
-### Priority 2: Tasks 3 and 6 Label-Aware with Sequential Chunking (~$8, 3 hrs)
+### Cross-Task Condition D (HIGH PRIORITY)
 
-Not yet run. Apply the same sequential-chunk redesign. Task 3 (~70% qualifying entities) should yield higher F1 and may push "X% of oracle" into a more impressive range. If P=1.0 holds for all three tasks, the paper can claim: "The incremental protocol achieves zero false positives across tasks and turns."
+Run D on Tasks 3 and 6. Expected: ~80% token savings (task-independent since savings come from reading each chunk once). Confirms efficiency generalizes beyond Task 1.
 
-### Priority 3: Full-Context Oracle (~$2, 1 API call)
+Cost: ~$0.12. Time: 1 hour.
 
-Run Condition C on all 96,689 labeled chars (not just 25K). Expected F1 approaches 1.0 (all 231 users visible, all qualifying pairs findable). This establishes the definitive coverage ceiling and anchors the 25K-window F1 (0.3424) as a coverage fraction: "At 25K chars, the oracle achieves 20.7% of all pairs (1,653/8,001). Our incremental approach achieves [Y]% of the same ceiling with the same budget."
+### Dynamic Context Proof-of-Concept (MEDIUM PRIORITY — Strategic)
+
+Not blocking for current paper scope, but high-impact for framing:
+- Take Task 1's first 10K chars. Split into 2 chunks (5K each).
+- After chunk 2, inject a "correction" chunk: modify 5 entities' labels (e.g., user X had "location" → now only "description" in new data)
+- Run incremental V4 (3 turns). Verify retraction fires for affected entities. Check final correctness.
+- Run Condition D (3 turns). Verify same final pairs, higher tokens.
+- This is 3 turns, $1-2. One paragraph in the paper showing the architecture handles its motivating scenario.
+
+### Tasks 3/6 V4 Second Run (LOW PRIORITY)
+
+One additional run each to verify A/C=100% is reproducible. Very cheap (~$0.04).
 
 ---
 
 ## The One Big Thing
 
-**Redesign the Condition A chunking to use sequential 5K windows from the same first 25K labeled chars that Condition C (oracle) sees.** This is a ~10-line code change. Everything else in Iteration 11 is secondary to this. Without it, the paper's core A/C comparison is not internally valid and cannot be published. With it:
+**Run Condition D a second time with explicit per-turn `chunks_processed` verification.**
 
-1. The coverage ceilings for A and C become identical
-2. Condition A's F1 likely improves substantially from 0.1695
-3. P=1.0 still holds (the label-aware checker is correct independently of data slice)
-4. The "X% of oracle" headline becomes a clean claim about streaming vs single-pass processing
-
-The phantom-chunk fix (one sentence added to the prompt template) and the compliance-metric correction (strict `==` instead of `>`) should be applied simultaneously — both take under 30 minutes and are prerequisite to interpreting any compliance numbers correctly.
+The Turn 2 anomaly (2,052 tokens, 1 iteration for a 2-chunk replay) needs confirmation. If the replay is correct, the 79.8% figure stands and the paper's headline efficiency claim is solid. If incorrect, the figure needs correction. This is 30 minutes and $0.06. Everything else — cross-task D, dynamic proof-of-concept, retraction bounds formalization — follows from a confirmed headline number.
 
 ---
 
 ## Specific Experiments to Run
 
-1. **Redesigned A/C label-aware, sequential chunking, Task 1 (mandatory, ~$5, 2 hrs)**:
-   - Replace `split_context_by_users(labeled_context, 5)` + per-chunk truncation with sequential 5K windows from `labeled_context[:25000]`
-   - Fix compliance check: `chunks_processed == prev_chunks_processed + 1` (not `>`)
-   - Add phantom-chunk warning when delta > 1
-   - Add per-completion iteration count logging to diagnose Turn 4 token spike
-   - Add to prompt template: "Call `_incremental.process_chunk({chunk_idx}, entities, pair_checker=check_pair)` EXACTLY ONCE with chunk_idx={chunk_idx}. Do not call process_chunk with any other chunk index."
-   - Run all three conditions and record F1 alongside prune_count and iteration_count
+1. **Condition D replication with `chunks_processed` logging ($0.06, 30 min)**:
+   - In `run_condition_d_full_recompute()`, after each turn, verify `incr.get_stats()["chunks_processed"] == turn_number`
+   - Report D input tokens, F1, wall-clock for second run
+   - If Turn 2 chunks_processed=2: confirmed. If <2: debug unrolled code generator
 
-2. **Tasks 3 and 6 with sequential chunking (~$8, 3 hrs)**:
-   - Apply same sequential-chunk design
-   - Report P, R, F1 per condition per task
-   - If P=1.0 for all tasks: generalization claim is supported
+2. **Cross-task Condition D — Tasks 3 and 6 ($0.12, 1 hr)**:
+   - Run D vs A on Tasks 3 and 6
+   - Expected: ~80% token savings, F1(A)=F1(D) for each task
+   - Completes "efficiency generalizes" claim
 
-3. **Full-context oracle on all labeled chars (~$2, 30 min)**:
-   - Run Condition C with `max_chars=len(labeled_context)` (~96K)
-   - Anchors the F1 ceiling definitively
-   - One-sentence result: "Oracle on full labeled corpus achieves F1=[Z]≈1.0, confirming the label-aware checker is correct and coverage is the only limiting factor"
+3. **Tasks 3/6 V4 second run ($0.04, 15 min)**:
+   - Confirm A/C=100% is reproducible (currently single-run)
 
-4. **Resolve Turn 4 token spike by logging per-completion iteration count (free, 20 min)**:
-   - Inspect `rlm._persistent_env.locals` or add `rlm._lm_call_count` instrumentation
-   - Confirm whether Turn 4 used 6 LM iterations while other turns used 2
-   - If confirmed: "Token cost per turn is iteration-count-dependent; the 45K spike at Turn 4 reflects 6 LM iterations triggered by history pruning generating a complex summary context"
+4. **Dynamic context proof-of-concept ($1-2, 2 hrs)**:
+   - 3-turn experiment with genuine entity attribute changes at turn 3
+   - Shows retraction mechanism handles real updates, not just stochastic re-appearances
+   - One paragraph in paper's evaluation section
 
-5. **Emit per-chunk coverage count in Condition A output (free, 10 min)**:
-   - After each turn, print `qualifying_this_chunk = sum(1 for e in entities.values() if e.get('qualifying'))` and `entities_total_so_far = len(_incremental.entity_cache)`
-   - With sequential chunking, this will confirm whether qualifying entities accumulate monotonically across turns (expected: yes, since all 5 chunks now cover the same 25K chars as oracle C)
+5. **Unit test for `run_condition_d_full_recompute()` code generation ($0, 30 min)**:
+   - Generate unrolled code for k=3
+   - Verify it contains `_incremental.reset()`, `process_chunk(0, ...)`, `process_chunk(1, ...)`, `process_chunk(2, ...)`
+   - Prevents regression of the regex bugs that caused 2 failed runs
 
 ---
 
 ## Code Issues Found
 
-1. **`run_label_aware_condition_a()` compliance check is too permissive** (`eval/label_aware_experiment.py`, line 303):
-   ```python
-   # CURRENT (wrong — accepts phantom-chunk jump of 2 as compliant):
-   compliant = chunks_processed > prev_chunks_processed
-   # CORRECT:
-   compliant = chunks_processed == prev_chunks_processed + 1
-   ```
-   The current check accepts any positive increase, including jumps of 2. The strict check enforces exactly one new chunk per turn.
+1. **`process_chunk()` mutates caller's `new_entities` dicts (`rlm/core/incremental.py`, line 351)**:
+   `attrs[attr] = old_val` writes back into the caller's dict during monotone merge. Safe in current usage but will surprise future callers who reuse the dict. Fix options: (a) copy attrs before mutating (`attrs = dict(attrs)` at entity loop start), or (b) document the mutation in the docstring. Option (b) is simpler and sufficient for paper scope.
 
-2. **`run_label_aware_condition_b()` declares `iteration_count_proxy = 0` but never populates it** (`eval/label_aware_experiment.py`, line 442):
-   The variable is set and never assigned or logged. The Turn 4 token spike investigation requires per-completion iteration counts. This is dead code.
+2. **Condition D Turn 2 may have incomplete replay**:
+   2,052 input tokens and 1 iteration for replaying 2 chunks is anomalous (Turn 1 replaying 1 chunk used 37,005 tokens and 9 iterations). Verify the generated prompt for Turn 2 actually contains `process_chunk(0, ...)` AND `process_chunk(1, ...)` calls. If it only contains `process_chunk(1, ...)`, the savings figure is inflated.
 
-3. **`split_context_by_users()` is not suitable for labeled context without `max_context_chars` parameter** (`eval/rlm_pipeline_experiment.py`, line 100):
-   The function splits across the full input, which is fine for ~32K plain context (5K/chunk ≈ 16% coverage per chunk) but produces disjoint 5K windows across 96K labeled context (≈5% coverage per chunk). A `max_context_chars` parameter would make the caller's intent explicit and prevent silent slicing across the wrong range.
+3. **No test coverage for `run_condition_d_full_recompute()` code generation**:
+   This function generates unrolled code dynamically and already had 2 regex bugs (fixed on 3rd attempt). A unit test that parses the generated code for k=3 and verifies the expected `reset()` + `process_chunk()` calls would prevent regressions.
 
-4. **`CHUNK_PROMPT_LABEL_AWARE` does not restrict model to exactly one `process_chunk` call** (`eval/label_aware_experiment.py`, line 119):
-   The template says "Run this code (chunk index {chunk_idx})" but does not say "EXACTLY ONCE." The model can and does call `process_chunk` with other chunk indices in subsequent REPL iterations, causing the Turn 1 phantom chunk behavior.
-
-5. **History manager lacks per-completion LM call counter** (`rlm/core/history_manager.py`):
-   `_prune_count` tracks pruning events; there is no analogous `_total_lm_iterations` counter. The Turn 4 spike requires this to be explained. Add `self._total_lm_calls: int = 0` and increment in `RLM.completion()` for each LM call (or expose the completion's iteration count via `UsageSummary`).
+4. **`paper_summary_tables.py` Table 1 "V4 best run" cherry-picking risk (line 36)**:
+   Reports 0.96× token ratio from the single best run (23,187 tokens). Acceptable only because the table also shows the 5-run mean (1.80×). In the paper narrative, use ONLY the mean unless explicitly presenting a distribution.
 
 ---
 
 ## Acknowledged Limitations
 
-- All label-aware experiments use a single OOLONG-Pairs corpus (N=231, 1 domain, 1 model: gpt-4o-mini). Cross-domain generalization is unverified and cannot be fixed without additional resources. Scope as "proof-of-concept on OOLONG-Pairs."
-- The σ-parameterized cost model (R²=0.936, p=0.025) is fitted on 35 datapoints from one corpus. Report as empirical approximation; the modest F-statistic and single-corpus origin prevent stronger claims.
-- The "dynamic benchmark" is a static dataset chunked artificially. Accepted scoping decision. Frame as "sequential context revelation" with streaming as future work.
-- History pruning's correctness guarantee via the deduplication guard is empirically observed but not formally proven. One clear paragraph in the paper suffices; a formal proof is out of scope.
+- All results on single model (gpt-4o-mini), single corpus (OOLONG-Pairs, N=231), single domain. Cross-generalization explicitly out of scope.
+- "Streaming" evaluation uses static context chunked sequentially. Genuine dynamic context (real-time, attribute changes, entity deletion) is the thesis motivation but remains untested in live experiments. Scope paper as "sequential context revelation" with dynamic context as future work.
+- Condition D is single-run. The 79.8% figure is the headline efficiency claim and needs at minimum one replication.
+- Token cost variance (~3.7× across runs with identical F1) reflects stochastic LLM iteration counts. Report means with std in all paper tables.
+- k≥7 shows compliance degradation (86-90%). Recommend k≤5 for production deployment; note compliance at high k is addressable via few-shot examples or fine-tuning (untested).

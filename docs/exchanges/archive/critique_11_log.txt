@@ -1,21 +1,19 @@
-The critique has been written to `docs/exchanges/critique_latest.md`. Here is a summary of the key findings:
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of what I found and wrote:
 
----
+## Key Findings
 
-## Critique Summary — Iteration 11
+**What's working well:**
+- Condition D (fair efficiency comparison) resolves the prior blocking issue — 79.8% token savings at 100% quality retention
+- k=3 stability is excellent: σ=0.000 across 4 runs, 97.1% A/C
+- The `process_chunk()` library code is sound — monotone merge, no-op detection, retraction accounting all correct
+- Paper tables are now comprehensive with 5-run means
 
-**Two previously unidentified structural issues** were found by inspecting `label_aware_task1_results.json` against the actual chunking code:
+**Top priorities I flagged:**
 
-### Critical Finding 1: Coverage Non-Equivalence in A/C Comparison
-`split_context_by_users()` applied to the 96K labeled corpus produces 5 disjoint ~5K windows spread across the full corpus — not 5 sequential windows from the same first 25K chars that oracle C sees. Condition A covers all 231 users shallowly (breadth-first); Condition C covers ~60 users deeply (depth-first). These are **different data slices with different coverage ceilings**. The "49.5% of oracle" (F1=0.1695 vs 0.3424) headline is comparing apples to oranges and cannot be published as-is. **Fix**: 10 lines of code — split `labeled_context[:25000]` into 5 sequential 5K windows.
+1. **Condition D replication** ($0.06, 30 min) — the headline 79.8% savings is from a single run, and Turn 2 shows a suspicious anomaly (2,052 tokens, 1 iteration for a 2-chunk replay). This must be verified before the paper can claim this number.
 
-### Critical Finding 2: Turn 1 Phantom Chunk
-`chunks_processed` jumped to 2 after Turn 1 (given only chunk 0's context) — the model called `process_chunk(1, {empty_entities}, ...)` alongside chunk 0 in consecutive REPL iterations. This permanently polluted chunk 1 in the deduplication guard with zero entities, causing Turn 2 to be blocked (non-compliant). The true compliance rate is 60%, not 80%. **Fix**: Add "Call process_chunk EXACTLY ONCE with chunk_idx={chunk_idx}" to the prompt template.
+2. **Cross-task Condition D** ($0.12) — run on Tasks 3/6 to confirm efficiency generalizes
 
-### What Holds Independently
-- **P=1.0 (zero false positives)** across all conditions and turns survives any experiment redesign — it's a property of the label-aware checker, not the data slice
-- **REPL-state as correctness ground truth** is a clean architectural insight, independently valid
-- **Retraction taxonomy** (360× range, temporal asymmetry mechanism) is empirically novel
+3. **Dynamic context proof-of-concept** ($1-2, 2 hrs) — after 15 iterations, zero experiments test the thesis motivation (dynamic context). Even a minimal 3-turn experiment with genuine entity attribute changes would strengthen the paper's framing.
 
-### The One Big Thing
-Redesign Condition A to use sequential 5K windows from `labeled_context[:25000]` — same data as oracle C. Expected: F1 improves substantially from 0.1695; P=1.0 maintained; A/C comparison becomes internally valid.
+**Code issues:** `process_chunk()` mutates caller's dicts during monotone merge (needs documentation), no test coverage for the Condition D code generator (which already had 2 regex bugs), and a cherry-picking risk in paper tables showing "best run" alongside means.
