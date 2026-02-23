@@ -1,0 +1,30 @@
+{
+  "condition": "B_matched_budget_label_aware_v3",
+  "version": 3,
+  "task_idx": 1,
+  "model": "gpt-4o-mini",
+  "context_chars": 5000,
+  "context_type": "labeled",
+  "check_pair_type": "label_aware",
+  "system_prompt": "RLM_SYSTEM_PROMPT",
+  "qualifying_labels": [
+    "location",
+    "numeric value"
+  ],
+  "compliant": true,
+  "chunks_processed": 1,
+  "pair_checks": 595,
+  "iteration_count": 7,
+  "f1": 0.0193,
+  "precision": 1.0,
+  "recall": 0.0097,
+  "tp": 78,
+  "fp": 0,
+  "fn": 7923,
+  "predicted_pairs": 78,
+  "gold_pairs": 8001,
+  "input_tokens": 31804,
+  "output_tokens": 1532,
+  "elapsed_sec": 30.81,
+  "prune_count": 0
+}
