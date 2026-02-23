@@ -709,3 +709,79 @@ class TestNonMonotonicRetraction:
         # Chunk 2: u1 goes back above threshold
         state.process_chunk(2, {"u1": {"score": 12}}, checker)
         assert len(state.pair_tracker) == 1
+
+
+class TestConditionDCodeGeneration:
+    """Unit tests for the Condition D unrolled code generation.
+
+    The `generate_unrolled_chunk_code()` function dynamically generates Python
+    code for the full-recompute RLM (Condition D). It previously had 2 regex bugs
+    (fixed on 3rd attempt in Iteration 15). These tests prevent regressions.
+    """
+
+    def test_k1_contains_reset_and_one_process_chunk(self):
+        """At k=1 (Turn 1), generated code should process exactly chunk 0."""
+        from eval.label_aware_v4_experiment import generate_unrolled_chunk_code
+
+        code = generate_unrolled_chunk_code(1)
+        assert "_incremental.process_chunk(0," in code
+        assert "_incremental.process_chunk(1," not in code
+        assert "entities_0" in code
+
+    def test_k3_contains_three_process_chunks(self):
+        """At k=3 (Turn 3), generated code should process chunks 0, 1, 2."""
+        from eval.label_aware_v4_experiment import generate_unrolled_chunk_code
+
+        code = generate_unrolled_chunk_code(3)
+        assert "_incremental.process_chunk(0," in code
+        assert "_incremental.process_chunk(1," in code
+        assert "_incremental.process_chunk(2," in code
+        assert "_incremental.process_chunk(3," not in code
+        # Verify independent entity dicts per chunk
+        assert "entities_0" in code
+        assert "entities_1" in code
+        assert "entities_2" in code
+
+    def test_k5_contains_five_process_chunks(self):
+        """At k=5, generated code should process chunks 0-4."""
+        from eval.label_aware_v4_experiment import generate_unrolled_chunk_code
+
+        code = generate_unrolled_chunk_code(5)
+        for ci in range(5):
+            assert f"_incremental.process_chunk({ci}," in code
+            assert f"entities_{ci}" in code
+        assert "_incremental.process_chunk(5," not in code
+
+    def test_regex_matches_pipe_separator(self):
+        """Verify the regex correctly matches '||' (pipe separator).
+
+        This is the exact bug that caused 2 failed Condition D runs in Iteration 15:
+        over-escaped '\\\\|\\\\|' produced '\\|\\|' in the raw string, matching
+        literal backslash-pipe instead of double-pipe.
+        """
+        import re
+
+        from eval.label_aware_v4_experiment import generate_unrolled_chunk_code
+
+        code = generate_unrolled_chunk_code(1)
+        # Extract the regex pattern from the generated code
+        regex_match = re.search(r"re\.search\(r'(.+?)',", code)
+        assert regex_match, "No re.search pattern found in generated code"
+        pattern = regex_match.group(1)
+
+        # The pattern must match actual OOLONG-Pairs format lines
+        test_line = "Date: Jan 01, 2025 || User: 12345 || Instance: test text || Label: location"
+        m = re.search(pattern, test_line)
+        assert m is not None, f"Pattern {pattern!r} failed to match OOLONG line"
+        assert m.group(1) == "12345", f"Expected uid=12345, got {m.group(1)}"
+        assert m.group(2).strip().lower() == "location"
+
+    def test_monotone_attrs_in_process_chunk_call(self):
+        """Verify monotone_attrs={'qualifying'} is in each process_chunk call."""
+        from eval.label_aware_v4_experiment import generate_unrolled_chunk_code
+
+        code = generate_unrolled_chunk_code(3)
+        for ci in range(3):
+            # Check each process_chunk call includes monotone_attrs
+            chunk_section = code.split(f"# Process chunk {ci}")[1] if ci < 2 else code.split(f"# Process chunk {ci}")[1]
+            assert 'monotone_attrs={"qualifying"}' in chunk_section
