@@ -206,8 +206,17 @@ class PairTracker:
         self._retracted.clear()
         return n
 
+    def has_pair(self, id1: str, id2: str) -> bool:
+        """Check if a pair exists (order-independent)."""
+        canonical = (min(id1, id2), max(id1, id2))
+        return canonical in self._pairs
+
     def __len__(self) -> int:
         return len(self._pairs)
+
+    def __contains__(self, pair: tuple[str, str]) -> bool:
+        """Check if a canonical pair exists."""
+        return pair in self._pairs
 
     def __repr__(self) -> str:
         return f"PairTracker({len(self._pairs)} pairs, {self._retraction_count} retractions)"
@@ -542,37 +551,39 @@ class IncrementalState:
             new_pairs_from_edits, pairs_before, pairs_after, precision_preserved.
         """
         pairs_before = len(self.pair_tracker)
-        total_retracted = 0
+
+        # Phase 1: Update all entities and collect ALL retracted pairs (deduplicated)
+        all_retracted: set[tuple[str, str]] = set()
+        for eid, new_attrs in edits.items():
+            self.entity_cache.add(eid, new_attrs, chunk_index=edit_chunk_index)
+            retracted = self.pair_tracker.retract_entity(eid)
+            all_retracted |= retracted
+
+        total_retracted = len(all_retracted)
+        self._total_retractions += total_retracted
+
         pairs_readded = 0
         new_pairs_from_edits = 0
 
-        for eid, new_attrs in edits.items():
-            # Update entity in cache
-            self.entity_cache.add(eid, new_attrs, chunk_index=edit_chunk_index)
+        if pair_checker:
+            # Phase 2: Re-evaluate all retracted pairs with updated attributes
+            for p in all_retracted:
+                a1 = self.entity_cache.get(p[0])
+                a2 = self.entity_cache.get(p[1])
+                if a1 and a2 and pair_checker(a1, a2):
+                    self.pair_tracker.add_pair(p[0], p[1])
+                    pairs_readded += 1
 
-            # Retract all pairs involving this entity
-            retracted = self.pair_tracker.retract_entity(eid)
-            total_retracted += len(retracted)
-            self._total_retractions += len(retracted)
-
-            if pair_checker:
+            # Phase 3: Check for NEW pairs (edited entities × all existing)
+            edited_ids = set(edits.keys())
+            for eid in edited_ids:
                 updated_attrs = self.entity_cache.get(eid)
-
-                # Re-evaluate retracted pairs
-                for p in retracted:
-                    partner_id = p[1] if p[0] == eid else p[0]
-                    partner_attrs = self.entity_cache.get(partner_id)
-                    if partner_attrs and pair_checker(updated_attrs, partner_attrs):
-                        self.pair_tracker.add_pair(eid, partner_id)
-                        pairs_readded += 1
-
-                # Check for NEW pairs with all existing entities
+                if not updated_attrs:
+                    continue
                 for other_id in self.entity_cache.get_ids():
                     if other_id == eid:
                         continue
-                    # Skip if pair already exists (re-added above)
-                    canonical = (min(eid, other_id), max(eid, other_id))
-                    if canonical in self.pair_tracker._pairs:
+                    if self.pair_tracker.has_pair(eid, other_id):
                         continue
                     other_attrs = self.entity_cache.get(other_id)
                     if other_attrs and pair_checker(updated_attrs, other_attrs):
