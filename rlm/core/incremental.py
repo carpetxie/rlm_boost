@@ -19,7 +19,10 @@ are automatically retracted and re-evaluated.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
+
+__all__ = ["EntityCache", "PairTracker", "IncrementalState"]
 
 
 class EntityCache:
@@ -318,8 +321,6 @@ class IncrementalState:
         # redundant call" to "correct and O(1) per redundant call".
         # Re-processing a chunk requires calling reset() first.
         if chunk_index in self._processed_chunk_indices:
-            import warnings
-
             warnings.warn(
                 f"process_chunk({chunk_index}) called more than once. "
                 f"Returning cached stats. Re-processing requires reset().",
@@ -480,8 +481,6 @@ class IncrementalState:
         # When len(updated_ids) >> len(new_ids), the O(u × n) sweep dominates
         # cost. Consider reducing chunk granularity or switching to full recompute.
         if updated_ids and new_ids and len(updated_ids) > len(new_ids) * 2:
-            import warnings
-
             warnings.warn(
                 f"High update ratio: {len(updated_ids)} updates vs {len(new_ids)} new entities "
                 f"at chunk {chunk_index}. The O(u×n) updated-entity sweep dominates cost. "
@@ -545,6 +544,7 @@ class IncrementalState:
         edits: dict[str, dict[str, Any]],
         pair_checker: Any = None,
         edit_chunk_index: int = -1,
+        merge: bool = False,
     ) -> dict[str, Any]:
         """Apply entity attribute edits and retract/re-evaluate affected pairs.
 
@@ -570,6 +570,10 @@ class IncrementalState:
             edits: {entity_id: new_attributes} for entities to modify
             pair_checker: Optional callable(attrs1, attrs2) -> bool
             edit_chunk_index: Chunk index to record for the edit (default -1)
+            merge: If True, merge new attributes into existing attributes instead
+                of replacing them. Existing attributes not present in the edit are
+                preserved. Default False (full replacement, caller must provide
+                complete attributes).
 
         Returns:
             Stats dict with: entities_edited, total_retracted, pairs_readded,
@@ -580,7 +584,12 @@ class IncrementalState:
         # Phase 1: Update all entities and collect ALL retracted pairs (deduplicated)
         all_retracted: set[tuple[str, str]] = set()
         for eid, new_attrs in edits.items():
-            self.entity_cache.add(eid, new_attrs, chunk_index=edit_chunk_index)
+            if merge:
+                old_attrs = self.entity_cache.get(eid) or {}
+                merged = {**old_attrs, **new_attrs}
+                self.entity_cache.add(eid, merged, chunk_index=edit_chunk_index)
+            else:
+                self.entity_cache.add(eid, new_attrs, chunk_index=edit_chunk_index)
             retracted = self.pair_tracker.retract_entity(eid)
             all_retracted |= retracted
 
