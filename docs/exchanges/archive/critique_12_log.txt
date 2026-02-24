@@ -1,15 +1,13 @@
 The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
 
-## Critique — Iteration 14 Summary
+## Critique Summary — Iteration 12
 
-**Overall**: The research has reached a genuine inflection point with 5-run stability (F1=0.322±0.004, P=1.0, 100% compliance), the naive-vs-incremental head-to-head with real API numbers, and validated at-risk fraction predictions. The paper skeleton is present.
+**Overall**: The project is approaching publishable quality. The full-corpus simulation (F1=1.0), no-retraction counterfactual, and `apply_edits()` API resolve the three highest-priority items from the prior critique. Scores improved on Technical Soundness (+0.5 → 9.0) and Benchmark Performance (+1.5 → 8.0).
 
-**Scores**: Novelty 7/10 (hold), Technical Soundness 8/10 (+1), Benchmark Performance 8/10 (hold), Scalability 6/10 (+1), Research Maturity 7/10 (+1).
+**The One Big Thing**: **Run the full-corpus LIVE API experiment** (Task 1, k=5, 96K chars, ~$0.50-1.00). The paper has two disconnected evidence streams — live API results at 25K (F1=0.32, looks weak) and simulation at 96K (F1=1.0, not a real system run). The live full-corpus run merges these into a publishable headline: "F1≈1.0 with live LLM at 64-80% savings."
 
-**The #1 blocking issue**: Table 2 (Naive vs Incremental) is a **structurally unfair comparison** — the naive arm lacks IncrementalState entirely (F1=0), so it conflates the structural benefit (having a framework) with the efficiency benefit (being incremental). A "Full-Recompute RLM" arm using the same IncrementalState but resetting each turn is needed. This is ~20 lines of code.
-
-**Other key actions**:
-- k=3 stability (3 more runs) — the paper's strongest number needs robustness
-- `paper_summary_tables.py` uses outlier-run values instead of 5-run means
-- Monotone optimization safety invariant needs a docstring warning
-- Outlier diagnosis (55 missing pairs) is zero-cost and adds a diagnostic paragraph
+**Key flags**:
+1. Table 9 (full-corpus simulation) gets a **partial pass** on the 3rd-party clarity test — must clearly distinguish "library correctness test" from "system benchmark"
+2. The counterfactual conflates two failure modes (stale pairs from downgrades + missing pairs from upgrades) — suggested separating into two ablations
+3. Cross-model validation has been deferred across 5 cycles — each deferral weakens the paper
+4. Five code issues flagged, including `apply_edits()` missing complexity documentation and the Gemini test import error
