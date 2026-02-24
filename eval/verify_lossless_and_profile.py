@@ -159,7 +159,10 @@ def run_verification_and_profiling(
 
         projections = []
         for n_proj in [1_000, 10_000, 100_000]:
-            # Assume pair density scales as p/C(n,2) ratio stays constant
+            # Assume pair density scales as p/C(n,2) ratio stays constant.
+            # NOTE: This is an UPPER BOUND — real-world pair density typically drops
+            # with scale (not every customer matches every product). The OOLONG-Pairs
+            # pair density (~30%) is unusually high due to the curated entity set.
             if n_final > 1:
                 pair_density = p_final / (n_final * (n_final - 1) / 2)
             else:
@@ -198,6 +201,83 @@ def run_verification_and_profiling(
                 f"{ratio:.4f}x ({ratio * 100:.2f}%)"
             )
 
+        # === CROSSOVER ANALYSIS ===
+        # At each projected N, compute when REPL state memory cost exceeds
+        # the token savings from incremental computation.
+        # Token savings formula: 1 - 2/(k+1) of total context per turn.
+        # At N entities with ~200 chars each, context is ~N*200 chars ≈ N*50 tokens.
+        print(f"\n  === CROSSOVER ANALYSIS: Memory Cost vs Token Savings ===")
+        print(f"  (At what N does maintaining REPL state cost more than token savings?)")
+        print()
+
+        k = num_chunks
+        savings_fraction = 1 - 2 / (k + 1)  # structural savings formula
+        # Pricing: gpt-4o-mini input = $0.15/1M tokens, output ≈ same
+        token_price = 0.15 / 1_000_000  # $/token
+
+        # Memory server cost: AWS m5.large ≈ $0.096/hr = $0.0000267/sec
+        # But we only need memory during the pipeline run. Let's use $/GB-hour.
+        # AWS ≈ $0.01/GB/hour for compute memory
+        memory_price_per_gb_hour = 0.01  # conservative
+
+        crossover_results = []
+        for n_proj in [231, 1_000, 10_000, 100_000]:
+            if n_final > 1:
+                pair_density = p_final / (n_final * (n_final - 1) / 2)
+            else:
+                pair_density = 0
+            p_proj = int(pair_density * n_proj * (n_proj - 1) / 2)
+            entity_mem = n_proj * bytes_per_entity
+            pair_mem = p_proj * bytes_per_pair
+            total_proj_bytes = entity_mem + pair_mem
+            total_proj_gb = total_proj_bytes / (1024 ** 3)
+
+            # Estimate context size at this N: ~200 chars/entity ≈ 50 tokens/entity
+            context_tokens = n_proj * 50
+            # Token savings per turn
+            saved_tokens_per_turn = context_tokens * savings_fraction
+            saved_cost_per_turn = saved_tokens_per_turn * token_price
+
+            # Memory cost per turn (assume 60 sec/turn for gpt-4o-mini)
+            memory_cost_per_turn = total_proj_gb * memory_price_per_gb_hour * (60 / 3600)
+
+            # Net benefit per turn
+            net_benefit = saved_cost_per_turn - memory_cost_per_turn
+
+            result = {
+                "n": n_proj,
+                "pairs": p_proj,
+                "repl_memory_mb": round(total_proj_bytes / (1024 * 1024), 2),
+                "saved_tokens_per_turn": int(saved_tokens_per_turn),
+                "token_savings_per_turn_usd": round(saved_cost_per_turn, 6),
+                "memory_cost_per_turn_usd": round(memory_cost_per_turn, 10),
+                "net_benefit_per_turn_usd": round(net_benefit, 6),
+                "cost_effective": net_benefit > 0,
+            }
+            crossover_results.append(result)
+            print(
+                f"  N={n_proj:>7,}: "
+                f"REPL={total_proj_bytes / (1024*1024):>8.2f} MB | "
+                f"Saved tokens/turn={int(saved_tokens_per_turn):>8,} | "
+                f"Token savings=${saved_cost_per_turn:.6f} | "
+                f"Memory cost=${memory_cost_per_turn:.10f} | "
+                f"Net benefit=${net_benefit:+.6f} | "
+                f"{'✓ cost-effective' if net_benefit > 0 else '✗ too expensive'}"
+            )
+
+        # === REBUILD PAIRS VERIFICATION ===
+        # Prove two-tier architecture: pairs are fully derivable from entity cache
+        print(f"\n  === REBUILD PAIRS VERIFICATION ===")
+        rebuild_result = state.rebuild_pairs(pair_checker=checker)
+        rb_status = "✓ MATCH" if rebuild_result["match"] else "✗ MISMATCH"
+        print(
+            f"  {rb_status}: original={rebuild_result['original_count']} pairs, "
+            f"rebuilt={rebuild_result['rebuilt_count']} pairs, "
+            f"checks={rebuild_result['rebuild_checks']}, "
+            f"missing={rebuild_result['missing_pairs']}, "
+            f"extra={rebuild_result['extra_pairs']}"
+        )
+
         results[task_idx] = {
             "task_id": task_idx,
             "num_chunks": num_chunks,
@@ -208,6 +288,8 @@ def run_verification_and_profiling(
             "per_entity_bytes": round(bytes_per_entity, 1),
             "per_pair_bytes": round(bytes_per_pair, 1),
             "projections": projections,
+            "crossover_analysis": crossover_results,
+            "rebuild_pairs": rebuild_result,
             "turn_details": turn_details,
         }
 
