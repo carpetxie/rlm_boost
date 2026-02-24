@@ -1,230 +1,255 @@
-# Critique — Iteration 14
+# Critique — Iteration 13
 
 STATUS: CONTINUE
 
 ## Overall Assessment
 
-The project has matured substantially over 17 researcher iterations. The CRITICAL GAP (fair D vs A comparison) is fully resolved with strong, reproducible results: 77-86% token savings with 100% quality retention across 3 tasks. The dynamic context proof-of-concept (Iteration 17) validates the retraction mechanism on live entity edits — a meaningful step toward the "Dynamic RLM" thesis. However, the paper's claims still rest on a narrow empirical base: one model (gpt-4o-mini), one corpus (OOLONG-Pairs), and crucially, only 25K of 96K available chars — capping absolute F1 at ~0.34. The full-corpus run is now the single highest-leverage remaining experiment: it would simultaneously raise absolute F1, demonstrate scalability, and remove the most obvious reviewer objection ("you only find 32% of pairs").
+The research has reached a strong position: full-corpus simulation demonstrates F1≈1.0 with 64% pair-check savings (matching the structural formula within 3pp), the no-retraction counterfactual provides compelling evidence that retraction is essential (precision drops to 0.81 with 10 edits), and `apply_edits()` makes the dynamic context claim architecturally honest. The **single most important remaining gap** is the absence of a **live API full-corpus run** — the simulation proves pair-check savings but does NOT prove token savings or LLM compliance at ~19K chars/chunk. This is a $1 experiment that transforms the paper from "simulation shows F1=1.0" to "live LLM achieves F1≈1.0 with 77-86% token savings."
 
 ## Reflection on Prior Feedback
 
 **Resolved — not re-raising:**
-- Fair D vs A comparison (CRITICAL GAP). Fully resolved across 3 tasks with 2 runs on Task 1. Done.
-- Multi-run stability. 5 runs k=5 (σ=0.004), 4 runs k=3 (σ=0.000). Done.
-- k-sensitivity sweep. k∈{3,5,7,10} live API data exists. Done.
-- Cross-task V4 validation. Tasks 1, 3, 6 all complete with at-risk fraction validated. Done.
-- Library-level monotone_attrs. Implemented, tested, eliminates stochastic compliance. Done.
-- Non-monotone sanity check (Task 11). Backward compatibility confirmed. Done.
-- Dynamic context experiment deferred across iterations 15-16. Now COMPLETED in Iteration 17. Done.
-- Structural savings formula. Derived: 1-2/(k+1). Done.
-- Retraction accounting bug. Fixed (cumulative→last). Done.
+- Full-corpus F1 presentation problem (F1=0.32 → F1=1.0 in simulation). Done.
+- No-retraction counterfactual (precision 1.0 → 0.81 without retraction). Done.
+- `apply_edits()` library method. Implemented with 5 tests. Done.
+- Sorted dict iteration fix in `select_entities_to_edit()`. Done.
+- Superlinear retraction reframing. Researcher agrees, will reframe. Done.
+- Fair Condition D vs A comparison across 3 tasks. Done (77-86% savings, 100% quality). Done.
+- Multi-run stability (5 runs k=5, σ=0.004). Done.
+- k-sensitivity sweep. Done.
+- Library-level monotone_attrs. Done.
+- Structural savings formula. Done.
 
-**Pushbacks accepted — not re-raising:**
-- Cross-model validation deferred as documented limitation. Accepted.
-- `PairTracker._retracted` unbounded growth. `clear_retracted()` exists, documented. Accepted.
+**Pushback accepted — not re-raising:**
+- Cross-model validation deferred as documented limitation. Accepted (but still recommended).
+- `PairTracker._retracted` unbounded growth. `clear_retracted()` exists. Accepted.
+- Simulation vs live API for full-corpus: researcher's argument that IncrementalState simulation uses the same library code is valid for pair-check savings. But token savings requires a live API run (see below).
 
 ## Scores
 
 | Criterion | Score | Delta | Comment |
 |-----------|-------|-------|---------|
-| Novelty | 7.5/10 | +0.5 | Dynamic context experiment adds a genuine new capability demonstration. Retraction mechanism validated on live entity edits. But the experiment is narrow: 1 task, 1 model, only chunk-0 edits, hand-crafted balanced edits. |
-| Technical Soundness | 8.5/10 | +0 | Condition D comparison remains the gold standard. Dynamic context simulation matches live API (91 retractions in both). Structural formula is clean. 187 tests passing. Code is well-engineered. |
-| Benchmark Performance | 6.5/10 | -1.5 | The 77-86% savings claim is strong. But I'm downgrading because absolute F1 ≈ 0.32 on a task where oracle F1 = 1.0 (C Full) is a severe presentation problem. The researcher has 96K chars available and only uses 25K. A reviewer will see this as the system "working but barely." The full-corpus run is the fix. |
-| Scalability | 6.5/10 | +0.5 | k-sensitivity + dynamic context add scalability dimensions. But all experiments use N=231 entities in 25K chars. The full-corpus run (N=231 in 96K chars) would test whether the framework scales with context window size. |
-| Research Maturity | 7.5/10 | +0 | 8 documented contributions, paper-ready tables, 5-run stability, fair comparison, dynamic context POC. Close to submission but needs the full-corpus experiment to make F1 numbers presentable. |
+| Novelty | 8.0/10 | +0.5 | No-retraction counterfactual + apply_edits() strengthen the retraction narrative. Full-corpus F1≈1.0 makes the efficiency claim dramatically more compelling. |
+| Technical Soundness | 8.5/10 | +0 | apply_edits() implementation is correct for multi-entity edits (verified by code review). Minor encapsulation violation and telemetry inflation issue (see Code Issues). 193 tests passing. |
+| Benchmark Performance | 8.0/10 | +1.5 | Major improvement. Full-corpus F1=1.0 (Task 1), 0.993 (Tasks 3/6) with 64% check savings. This is the result the paper needed. But it's simulation-only — the live API confirmation is still the missing piece for the headline table. |
+| Scalability | 6.5/10 | +0 | Still single model (gpt-4o-mini), single corpus. The full-corpus simulation shows the framework scales to 96K chars. But ~19K chars/chunk is a real chunk size that needs live API validation — does the LLM comply when the chunk is 4× larger? |
+| Research Maturity | 8.0/10 | +0.5 | 9 documented contributions, paper-ready tables, full-corpus numbers, counterfactual evidence. Close to submission. The live API run is the one remaining must-do. |
 
 ## Architecture Review
 
-### The Core Architecture Is Solid
+### apply_edits() — Correct but with Minor Issues
 
-`rlm/core/incremental.py` is clean, well-documented, and correctly implements the claimed algorithm. After reviewing the full file:
+Reviewed the full implementation (lines 518-595 of `rlm/core/incremental.py`). The multi-entity interaction semantics are correct:
 
-- Monotone merge logic (lines 346-364): correctly handles all four cases (truthy→truthy, truthy→falsy preserve, falsy→truthy genuine change, falsy→falsy).
-- No-op update detection (lines 360-364): correctly skips `updated_ids` when all monotone attrs unchanged.
-- Idempotency guard (lines 311-319): prevents Failure Mode C with O(1) cached return.
-- `checked_in_updated_sweep` deduplication (lines 441-460): prevents inflated pair_checks.
-- `retract_entity()` partner cleanup (lines 167-170): prevents double-counting.
+- **Ordering**: When entities A and B are both edited and share a pair, A is processed first (retract, re-evaluate, check new), then B. The pair (A,B) may be retracted and re-added during A's pass, then retracted again during B's pass with B's updated attributes. The final pair set is correct because B's pass sees A's already-updated attributes.
+- **Upgrade-upgrade**: Both A and B non-qualifying → qualifying. A's pass doesn't discover (A,B) because B isn't updated yet. B's pass discovers it. Correct.
+- **Downgrade-downgrade**: Both downgraded. A's pass retracts (A,B) and cleans up B's index. B's pass has nothing to retract. Correct.
 
-**No new core library bugs found.** The implementation quality is high.
+**Issue 1 — Encapsulation violation (line 575)**: `if canonical in self.pair_tracker._pairs` directly accesses the private `_pairs` set. Add a `has_pair()` or `__contains__` method to PairTracker. This is a code smell that will cause problems if the internal representation changes.
 
-### Dynamic Context Edit Path Bypasses the Framework
+**Issue 2 — Telemetry double-counting for multi-entity edits**: When two edited entities share a pair, `total_retracted` counts the same pair twice (once per entity's retraction). `pairs_readded` also counts the re-add twice. The net `permanent_retractions` calculation (`total_retracted - pairs_readded`) is correct because the inflation cancels, but the individual `total_retracted` and `pairs_readded` fields overstate the true values. For 5-10 edits this is negligible; for larger edit batches it could mislead analysis.
 
-In `eval/dynamic_context_experiment.py`, the edit turn (Turn 3, lines 100-136) bypasses `process_chunk()` entirely — it directly calls `entity_cache.add()` + `pair_tracker.retract_entity()` + manual re-evaluation loop. This means the edit path doesn't benefit from:
-1. The monotone merge logic in `process_chunk()`
-2. The idempotency guard
-3. The `_total_retractions` counter (hence the telemetry gap noted in the researcher response)
-4. The `checked_in_updated_sweep` deduplication
-
-This is pragmatically fine for the POC, but creates an awkward gap between the claim ("our framework handles dynamic updates") and the implementation (the dynamic update code path is manual, not framework-level).
-
-**Concrete suggestion** — add an `apply_edits()` method to `IncrementalState`:
+**Concrete fix**: Process all retractions first (collect retracted pairs into a deduplicated set), then re-evaluate once. This separates the retract and evaluate phases:
 
 ```python
-def apply_edits(
-    self,
-    edits: dict[str, dict[str, Any]],
-    pair_checker: Any = None,
-) -> dict[str, Any]:
-    """Apply entity attribute edits and retract/re-evaluate affected pairs.
+def apply_edits(self, edits, pair_checker=None, edit_chunk_index=-1):
+    # Phase 1: Update all entities and collect ALL retracted pairs
+    all_retracted = set()
+    for eid, new_attrs in edits.items():
+        self.entity_cache.add(eid, new_attrs, chunk_index=edit_chunk_index)
+        retracted = self.pair_tracker.retract_entity(eid)
+        all_retracted |= retracted
 
-    For dynamic context scenarios where entity attributes change between turns
-    (document edits, streaming corrections, etc.).
+    total_retracted = len(all_retracted)  # Deduplicated count
 
-    Returns stats dict with: entities_edited, total_retracted, new_pairs, pairs_readded.
-    """
+    # Phase 2: Re-evaluate all retracted pairs with updated attributes
+    pairs_readded = 0
+    new_pairs_from_edits = 0
+    if pair_checker:
+        for p in all_retracted:
+            a1 = self.entity_cache.get(p[0])
+            a2 = self.entity_cache.get(p[1])
+            if a1 and a2 and pair_checker(a1, a2):
+                self.pair_tracker.add_pair(p[0], p[1])
+                pairs_readded += 1
+
+        # Phase 3: Check for new pairs (edited entities × all)
+        edited_ids = set(edits.keys())
+        for eid in edited_ids:
+            updated_attrs = self.entity_cache.get(eid)
+            for other_id in self.entity_cache.get_ids():
+                if other_id == eid:
+                    continue
+                if self.pair_tracker.has_pair(eid, other_id):
+                    continue
+                other_attrs = self.entity_cache.get(other_id)
+                if other_attrs and pair_checker(updated_attrs, other_attrs):
+                    self.pair_tracker.add_pair(eid, other_id)
+                    new_pairs_from_edits += 1
+    # ... telemetry updates
 ```
 
-This is ~30 lines, directly extracted from the experiment code. It makes the "dynamic context" claim architecturally honest — the framework itself supports edits, not just the experiment script.
+This is also more efficient: O(|all_retracted|) re-evaluations instead of potentially re-evaluating the same pair twice.
 
-### Token Variance in Condition D
+### dynamic_context_experiment.py Still Uses Manual Edit Path
 
-D token counts vary 3× across runs (246K vs 80K for Task 1, identical F1). The structural formula resolves this cleanly — but Table 2c should include a "structural" column alongside empirical numbers to give the reader a variance-free anchor. The researcher is already doing this in Table 7; suggest merging the structural prediction INTO Table 2c rather than having a separate table.
+The researcher noted "Update dynamic context experiment to use apply_edits()" as a next step but didn't implement it. The live API REPL code (lines 95-136) still manually calls `entity_cache.add()` + `pair_tracker.retract_entity()` + manual loop. This means the live API experiment validates the MANUAL path, not the `apply_edits()` library method.
+
+**Impact**: The paper claims "apply_edits() handles dynamic context" but the only live API evidence uses a different code path. The counterfactual experiment (Exp 48) DOES use `apply_edits()`, which is good, but that's a simulation.
+
+**Recommendation**: Update the REPL template in `dynamic_context_experiment.py` to call `_incremental.apply_edits(edits_dict, pair_checker=check_pair)`. This is a ~10-line change that aligns the live API evidence with the library API.
 
 ## Novelty Assessment
 
-### What's Genuinely Novel (Strong)
+### Genuinely Novel (Strong — quantify these in the paper)
 
-1. **IncrementalState as a reusable library** for LLM-program incremental computation. Entity cache + pair tracker + retraction is a clean abstraction.
-2. **P=1.0 across all runs, all turns, all tasks** — zero false positives from structured decomposition. The paper's most surprising result.
-3. **At-risk fraction as a predictive diagnostic** — validated ordering across 3 tasks.
-4. **Library-vs-template design principle** — V3→V4 demonstrating that invariants belong in library code, not LLM prompts. Broadly useful insight.
-5. **Monotone attribute accumulation as a correctness condition** — clean result with practical value.
+1. **F1≈1.0 at 64% pair-check savings on full corpus** — the headline result. Transforms the contribution from "efficient but barely works" to "efficient AND nearly perfect."
+2. **P=1.0 across ALL runs, ALL turns, ALL tasks** — the most surprising empirical finding. Frame prominently.
+3. **Retraction is essential, not optional**: No-retraction counterfactual shows precision drops from 1.0 to 0.81 with 10 edits. Concrete evidence that the mechanism provides real value.
+4. **Library-vs-template design principle**: V3→V4 demonstrating that invariants belong in library code. Broadly useful for LLM program design.
+5. **At-risk fraction as a predictive diagnostic**: Validated ordering across 3 tasks.
 
-### What's Incrementally Novel (Medium)
+### The Contribution That's Underemphasized
 
-6. **Retraction mechanism for non-monotonic incremental computation** — novel in the LLM context, but prior art exists in database stream processing (RETE networks, incremental view maintenance). The paper should cite and differentiate.
-7. **Structural savings formula** 1-2/(k+1) — correct but trivially derived. Present as a useful bound, not a standalone contribution.
-8. **Dynamic context POC** — validates the mechanism works on live API. The superlinear retraction scaling (18.2/edit→78.1/edit) is expected combinatorial behavior, not a surprising finding. Frame accurately.
+The **"library-level correctness guarantees for LLM programs"** idea is more general than the pair-finding application. The insight: when you decompose an LLM task into structured stateful computation (EntityCache, PairTracker, retraction), the library can enforce invariants that the LLM cannot reliably maintain via prompts alone. V3→V4 is a clean demonstration:
 
-### What Would Increase Novelty
+| | Template-level (V3) | Library-level (V4) |
+|---|---|---|
+| Compliance | 60-100% (stochastic) | 100% (deterministic) |
+| Token overhead | 2.4-4.8× | 1.3× |
+| Retractions | ~1,078 no-op | 0 |
 
-- **Full-corpus results** showing F1 >> 0.34 would make the efficiency story dramatically more compelling. Currently "we save 80% of tokens to get F1=0.32" is a hard sell; "we save 80% of tokens to get F1=0.90" is a strong paper.
-- **No-retraction counterfactual** for the dynamic context experiment: what happens if you edit entities but DON'T retract? How many invalid pairs persist? This quantifies the retraction mechanism's VALUE, not just its existence.
+This is a broadly applicable finding for any "LLM programs with REPL execution" system. Frame it as a design principle, not just an optimization.
 
 ## 3rd-Party Clarity Test
 
-### Table 2c (D vs A vs C, Cross-Task): ✅ PASSES
+### Table 9 (Full-Corpus A vs D Simulation): ⚠️ PARTIAL PASS — Simulation Only
 
-A skeptical engineer reads: "Both D and A use the same framework. D resets and replays all chunks; A processes only the new one. F1 is identical across 4 experiments and 3 tasks. A saves 77-86% of tokens." Clear, fair, meaningful. Minor: note the D token variance (246K vs 80K) so readers don't think the 79.8% and 77.1% savings represent different capabilities.
+A skeptical engineer reads: "F1=1.0 on the full corpus, 64% pair-check savings." Strong result. But then asks: **"These are simulated pair checks, not actual LLM token savings. Where's the live API run?"**
 
-### Table 3 (Cross-Task V2→V4 Improvement): ✅ PASSES
+The simulation uses `IncrementalState` directly — no LLM involved. It proves:
+- ✅ The library correctly computes incremental pair checks
+- ✅ The monotone merge produces identical results to full recompute
+- ✅ Pair-check savings match structural formula
 
-At-risk fraction ordering matches ΔA/C ordering. Clean falsifiable prediction, validated across 3 tasks. Unambiguous.
+It does NOT prove:
+- ❌ Token savings (which depend on prompt overhead, LLM iteration counts, etc.)
+- ❌ LLM compliance at ~19K chars/chunk (4× larger than the validated 5K chunks)
+- ❌ F1≈1.0 through the full RLM pipeline (LLM extraction errors could reduce this)
 
-### Table 8 (Dynamic Context): ⚠️ PARTIAL PASS — Missing Counterfactual Baseline
+**Blocking issue**: The paper cannot claim "77-86% token savings at F1≈1.0" without a live API full-corpus run. It CAN claim "64% pair-check savings at F1=1.0 (simulation)" and "77-86% token savings at F1=0.32 (live API, 25K context)" separately. But the combined claim requires combined evidence.
 
-**Blocking issue**: The table shows the retraction mechanism WORKS (retractions fire, P=1.0 maintained). But a skeptical engineer asks: **"What would happen WITHOUT retraction?"** If the answer is "nothing bad, because the edits barely affect the pair set," then the mechanism is correct but unimportant. If the answer is "precision drops from 1.0 to 0.7 because 30% of pairs become invalid," then the mechanism is essential.
+### Table 10 (No-Retraction Counterfactual): ✅ PASSES
 
-Currently, the 5-edit experiment has pair delta = 0 (net unchanged). The 10-edit experiment has delta = -61 (from 496 to 435). But neither tells us how many INVALID pairs would persist without retraction. The no-retraction counterfactual is zero-cost (simulation only) and directly answers the value question.
+Clear comparison: with vs without retraction, same edits, same starting state. Precision drops from 1.0 to 0.81-0.92. 99-240 invalid pairs persist. Unambiguous.
 
-**Suggested addition to Table 8**:
+Minor note: this uses the 25K subset (4 chunks × 5K). Running on the full corpus would show more dramatic numbers.
 
-| Metric | With Retraction | Without Retraction |
-|--------|----------------|-------------------|
-| Invalid pairs remaining | 0 | X |
-| Precision | 1.0 | Y |
-| Correctness | ✓ | ✗ |
+### Table 2c (Cross-Task D vs A, Live API): ✅ PASSES (unchanged)
 
-### Naive vs Incremental (Table 2b): ✅ PASSES
+Still the strongest table. 4 experiments, 3 tasks, 100% quality retention, 77-86% token savings. Real API numbers.
 
-Correctly labeled as structural advantage. Not a strawman — properly separated from the fair D vs A efficiency comparison.
+### Headline Paper Table — STILL INCOMPLETE
 
-### Superlinear Retraction Scaling Claim: ⚠️ NEEDS REFRAMING
+The paper needs ONE table that tells the complete story. Current state:
 
-The "superlinear" claim (18.2/edit at 5 edits → 78.1/edit at 10 edits) is presented as a "novel finding." It's actually expected combinatorial behavior: with more edits, edited entities interact with each other (A's retraction involves B, B's involves A). Present as "expected quadratic interaction between edited entities" rather than a novel finding. The interesting observation is that the PairTracker's partner cleanup prevents double-counting despite the combinatorial explosion — that's the engineering contribution.
+| Approach | Context | F1 | Pair Savings | Token Savings | Cost | Time |
+|----------|---------|-----|-------------|---------------|------|------|
+| Naive RLM (no framework) | 25K | 0.0 | — | — | $0.025 | 135s |
+| Full-recompute D (25K) | 25K | 0.3228 | baseline | baseline | ~$0.05 | ~250-540s |
+| Incremental A (25K) | 25K | 0.3228 | 58% (sim) | **77-86%** | ~$0.007 | ~120s |
+| Oracle C (25K) | 25K | 0.3424 | — | — | ~$0.004 | ~30s |
+| Oracle C (96K) | 96K | 1.0 | — | — | — | — |
+| **Full-corpus A (96K)** | 96K | **1.0 (sim)** | **64% (sim)** | **? (no live data)** | **?** | **?** |
+| **Full-corpus D (96K)** | 96K | **1.0 (sim)** | baseline | **?** | **?** | **?** |
+
+The "?" cells are why the live API full-corpus run is essential. A reviewer will see: "The best F1 numbers are simulation-only. The live API numbers cap at F1=0.32."
 
 ## Experiment Critique
 
 ### What's Solid
 
-1. **Multi-run stability**: 5 runs k=5 (σ=0.004), 4 runs k=3 (σ=0.000). Publication-grade.
-2. **Cross-task generalization**: 3 tasks, consistent results, at-risk predictor validated.
-3. **Condition D fair comparison**: 4 experiments, 3 tasks, 100% quality retention. The paper's strongest claim.
-4. **Dynamic context POC**: Simulation matches live API. Retraction mechanism validated end-to-end.
-5. **k-sensitivity**: Practical recommendation (k≤5) is data-driven.
+1. **Full-corpus simulation**: Clean, reproducible, matches structural prediction. 3 tasks. Good.
+2. **No-retraction counterfactual**: Well-designed ablation study. Quantifies retraction value concretely.
+3. **apply_edits() with 5 tests**: Good software engineering. Makes the API claim honest.
+4. **All prior work**: D vs A comparison, multi-run stability, k-sensitivity, at-risk fraction — all remain valid and strong.
 
 ### What's Missing (in priority order)
 
-1. **Full-corpus run (HIGH — removes the "F1=0.32" presentation problem)**: All experiments use 25K of 96K chars. C Full achieves F1=1.0 on 96K. Running A and D on the full corpus (k=5, ~19K chars/chunk) would show F1 >> 0.34 while maintaining the same savings pattern. Cost: $0.50-1.00. This single experiment transforms the paper's impact.
+1. **Live API full-corpus run (HIGHEST — $0.50-1.00, ~2 hrs)**:
+   Run Condition A and D on 96K chars with live gpt-4o-mini calls. Expected: F1 close to 1.0 (sim shows 1.0), token savings similar to structural (66.7%), same P=1.0. The `--full-corpus-live` flag is already implemented.
 
-2. **No-retraction counterfactual for dynamic context (HIGH — zero cost)**: Simulation showing what happens if edits are applied without calling `retract_entity()`. Quantifies how many invalid pairs persist and the resulting precision drop. Makes the dynamic context section convincing rather than just "mechanism fires correctly."
+   **Why simulation isn't enough**: At ~19K chars/chunk, the LLM receives 4× more context per turn than the validated 5K setting. Compliance, extraction accuracy, and iteration count may all differ.
 
-3. **`apply_edits()` library method (MEDIUM — architecture claim)**: Makes the dynamic context capability first-class. ~30 lines + 4 tests. The paper claims "the framework handles dynamic updates" — the framework should actually expose this as an API.
+2. **Migrate dynamic_context_experiment.py to use apply_edits() ($0, 30 min)**:
+   Replace REPL template lines 95-136 with `_incremental.apply_edits(edits_dict, pair_checker=check_pair)`. Aligns live API evidence with library API.
 
-4. **Cross-model spot check (LOW-MEDIUM)**: One run of Task 1, k=5 with gpt-4o. Even a single data point showing the same pattern (P=1.0, similar savings) would address the "gpt-4o-mini-specific" concern.
+3. **apply_edits() two-phase refactor ($0, 1 hr)**:
+   Separate retract-all from re-evaluate-all. Fix telemetry inflation. Add multi-entity interaction test.
+
+4. **Cross-model spot check (LOW — $0.50, 30 min)**:
+   Single gpt-4o run. Still deferred, still recommended.
 
 ## The One Big Thing
 
-**Run the full-corpus experiment: Condition A and D on Task 1, k=5, ~19K chars/chunk, 96K total context.**
+**Run the live API full-corpus experiment.** The code exists (`--full-corpus-live`). It costs ~$1 and takes ~2 hours. This single experiment:
 
-Cost: ~$0.50-1.00. This is the single experiment that transforms the paper.
+1. Fills the "?" cells in the headline table
+2. Proves F1≈1.0 through the full RLM pipeline (not just simulation)
+3. Validates LLM compliance at ~19K chars/chunk
+4. Provides real token savings numbers at full-corpus scale
+5. Makes the paper submission-ready
 
-**Why**: Every result table currently shows F1 ≈ 0.32. A reviewer's first reaction is "the system barely works." The explanation ("we only use 25K of 96K chars, the oracle gets F1=1.0 on 96K") is technically correct but unconvincing without showing what happens at full scale. The full-corpus run is expected to show:
-- F1(A) = F1(D) >> 0.34 (likely 0.85-0.95 based on 93.7% A/C ratio and C Full F1=1.0)
-- Same 77-86% token savings (structural formula still 66.7% at k=5)
-- Same P=1.0
-- Same 100% compliance
-
-This transforms the narrative from "we save 80% of tokens but only find 32% of pairs" to "we save 80% of tokens while finding 90%+ of pairs." Both are true, but one is publishable and the other invites immediate rejection.
+Without it, the paper has a split personality: "our simulation shows F1=1.0" but "our actual system shows F1=0.32." A reviewer will fixate on the live number.
 
 ## Specific Experiments to Run
 
-In priority order:
+1. **Live API full-corpus run ($1, ~2 hrs) — MUST-DO**
+   ```bash
+   python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 1 --k 5
+   python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 3 --k 5
+   python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 6 --k 5
+   ```
+   Expected: F1 ≈ 0.9-1.0, token savings ~65-80%, P=1.0.
+   If compliance breaks at ~19K chars/chunk, try k=3 (~32K chars/chunk) or k=7 (~14K chars/chunk).
 
-1. **Full-corpus incremental run ($0.50-1.00, ~2 hrs) — HIGHEST**
-   - Task 1, k=5, ~19K chars/chunk, 96K total labeled context
-   - Run Condition A (incremental) and Condition D (full-recompute)
-   - Expected: F1 >> 0.34, savings ~77-86%, quality ratio 100%
-   - Also run Condition C (oracle on full 96K) if not already available — but C Full F1=1.0 already exists from Iteration 11
-   - **This is the paper's most important missing data point**
+2. **Migrate dynamic_context_experiment.py to apply_edits() ($0, 30 min)**
+   Update REPL template lines 95-136 to use `_incremental.apply_edits()`.
 
-2. **No-retraction counterfactual ($0, 30 min) — HIGH**
-   - Modify `run_dynamic_context_simulation()`: after applying edits via `entity_cache.add()`, DON'T call `retract_entity()`. Count invalid pairs remaining. Compute precision.
-   - Add a "Without retraction" column to Table 8
-   - Directly answers "why does retraction matter?"
+3. **apply_edits() encapsulation fix + two-phase refactor ($0, 1 hr)**
+   Add `PairTracker.has_pair(id1, id2) -> bool`. Separate retract/evaluate phases in apply_edits(). Add test: edit 2 entities sharing a pair, verify deduplicated retraction count.
 
-3. **`apply_edits()` method on IncrementalState ($0, 1 hr) — MEDIUM**
-   - Extract the edit loop from `dynamic_context_experiment.py` lines 100-136 into `IncrementalState.apply_edits()`
-   - 4 unit tests: (a) downgrade removes pairs, (b) upgrade adds pairs, (c) precision=1.0 maintained, (d) stats track edit retractions correctly
-   - Updates `_total_retractions` counter (fixes the telemetry gap)
-   - Makes the dynamic context claim architecturally honest
+4. **Full-corpus no-retraction counterfactual ($0, 15 min)**
+   Run on 96K chars. More entities → more dramatic precision drop. Strengthens the retraction argument.
 
-4. **Full-corpus Tasks 3 and 6 ($1.00, ~2 hrs) — MEDIUM**
-   - If full-corpus Task 1 succeeds, replicate on Tasks 3 and 6
-   - Cross-task validation at full corpus scale
-
-5. **Cross-model spot check ($0.50, 30 min) — LOW-MEDIUM**
-   - Task 1, k=5, V4 with gpt-4o (single run)
-   - Verify: same pattern (P=1.0, similar A/C ratio, similar savings)
+5. **Chunk boundary alignment check ($0, 15 min)**
+   Verify that `full_corpus_and_counterfactual.py`'s character-boundary chunking doesn't split mid-entity-profile. If it does, align to user profile boundaries (use the regex-based chunking from `_make_sequential_chunks`).
 
 ## Code Issues Found
 
-1. **Dynamic context edit path bypasses `IncrementalState.process_chunk()` — `eval/dynamic_context_experiment.py` lines 100-136**:
-   The REPL code template and simulation both manually call `entity_cache.add()` + `pair_tracker.retract_entity()` + manual pair re-evaluation. This duplicates logic from `process_chunk()` without deduplication guards, monotone merge, or telemetry. The `_total_retractions` counter in IncrementalState doesn't track edit retractions. Fix: add `apply_edits()` to IncrementalState (see experiment #3 above).
-
-2. **`compute_gold_pairs_with_edits()` doesn't use `_check_pair_condition()` — `eval/dynamic_context_experiment.py` lines 211-238**:
-   The function checks if both entities are qualifying, but doesn't use the real task condition from `eval/utils.py::_check_pair_condition`. For Task 1 (symmetric, "at least one qualifying label"), this produces correct results. For asymmetric tasks, this will produce wrong gold pairs. Add a TODO or replace with the real checker if extending beyond Task 1.
-
-3. **`select_entities_to_edit()` iterates unsorted dicts — `eval/dynamic_context_experiment.py` lines 187-208**:
-   `qualifying.items()` iteration order depends on insertion order. For reproducibility across runs, sort by entity ID:
+1. **`apply_edits()` accesses private `_pairs` — `rlm/core/incremental.py` line 575**:
    ```python
-   for i, (uid, attrs) in enumerate(sorted(qualifying.items())):
+   if canonical in self.pair_tracker._pairs:  # Private access
    ```
+   Fix: Add `has_pair(id1, id2) -> bool` to PairTracker, then use `self.pair_tracker.has_pair(eid, other_id)`.
 
-4. **Table 8 F1 values inconsistency between simulation and live API**:
-   `paper_summary_tables.py` Table 8 reports "F1 vs updated gold (T4)" as 0.5445 for 5 edits (live API). But the simulation JSON shows `f1_final: 0.8327` for 5 edits (post-T4). The discrepancy exists because the simulation processes entities deterministically while the live API relies on LLM extraction (which misses entities). The table should either (a) note this is the live API result, or (b) include both simulation and live numbers to show the gap.
+2. **`apply_edits()` telemetry inflated for multi-entity edits — lines 549-581**:
+   When two edited entities share a pair, `total_retracted` and `pairs_readded` both count the pair twice. Net calculation is correct (inflation cancels). Fix with two-phase refactor above.
 
-5. **Missing `max_retries` for oracle C runs**:
-   Task 6 V4 Run 2 oracle C failed (F1=0.0, 0 entities found — stochastic LLM failure). This has happened at least twice. Adding `max_retries=3` to oracle runs with F1>0 as success criterion is a ~5-line defensive change that prevents wasted experiment budget.
+3. **`dynamic_context_experiment.py` REPL template bypasses `apply_edits()` — lines 95-136**:
+   Live API evidence misaligned with library API. Update to call `_incremental.apply_edits()`.
 
-6. **`_retracted` set in PairTracker still grows unboundedly in dynamic context experiments**:
-   The 10-edit live experiment fires 781 retractions. Each retracted pair is added to `_retracted`. If an entity is retracted and its pairs are re-added, those pairs are removed from `_retracted` via `discard()` in `add_pair()`. But pairs that are permanently invalidated accumulate forever. For 781 retractions this is trivial, but for production streaming use, the auto-clear recommendation from Critique 10 still applies.
+4. **`compute_gold_pairs_with_edits()` doesn't use `_check_pair_condition()` — `eval/dynamic_context_experiment.py` lines 211-238**:
+   Simplified check, correct for Task 1 only. Add `assert task_idx == 1` guard or use the real checker.
+
+5. **`tests/clients/test_gemini.py` collection error**: Import error prevents full test suite from running. Pre-existing but should be fixed.
+
+6. **`full_corpus_and_counterfactual.py` character-boundary chunking (lines 271-275)**: May split mid-entity-profile. Verify this doesn't cause entity loss in the live API path.
 
 ## Acknowledged Limitations
 
-- Single model (gpt-4o-mini), single corpus (OOLONG-Pairs, N=231). Cross-generalization is out of scope for proof-of-concept.
-- All experiments use 25K of 96K chars, capping absolute F1 at ~0.34. The full-corpus experiment is the top-priority fix.
-- Dynamic context experiment uses hand-crafted, balanced edits (2 down / 3 up or 5/5). Real-world edit patterns would be less predictable.
-- The "streaming" metaphor is applied to static data chunked sequentially — accepted scoping.
-- Token variance in Condition D makes absolute token comparisons fragile. The structural formula mitigates this.
-- Non-monotone tasks (Task 11) show F1=0.047 — the framework works but accuracy is poor. This is a documented scope boundary.
+- Single model (gpt-4o-mini). Cross-model validation deferred as documented limitation. Accepted.
+- OOLONG-Pairs corpus only (N=231 entities). Cross-corpus validation out of scope. Accepted.
+- Dynamic context experiment uses hand-crafted balanced edits. Accepted for POC.
+- Non-monotone tasks (Task 11) show F1=0.047 — documented scope boundary. Accepted.
+- Token variance in Condition D (3× range across runs). Structural formula mitigates. Accepted.

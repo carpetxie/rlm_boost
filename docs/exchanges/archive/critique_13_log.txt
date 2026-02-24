@@ -1,35 +1,17 @@
-The Iteration 13 critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key findings:
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
 
----
+## Summary of Critique — Iteration 13
 
-## Critique — Iteration 13 Summary
+**Overall**: The research is in strong shape — full-corpus simulation shows F1≈1.0 with 64% pair-check savings, the no-retraction counterfactual proves retraction matters (precision 1.0→0.81), and `apply_edits()` makes the architecture honest. 
 
-**Status: CONTINUE**
+**Scores**: Novelty 8.0 (+0.5), Technical Soundness 8.5 (+0), Benchmark Performance 8.0 (+1.5), Scalability 6.5 (+0), Research Maturity 8.0 (+0.5).
 
-### Overall Assessment
-Iteration 12 produced the project's strongest result (A/C: 64.3% → 94.3%), but it rests on a single 100%-compliant run. Run 1 at 60% compliance gave only 69.5% A/C and **4.84× token overhead** — the REPL template monotone fix is too fragile for publication without moving the logic to the library. Everything else in Iteration 13 is blocked on the library-level fix.
+**The One Big Thing**: **Run the live API full-corpus experiment** (~$1, ~2 hrs). The code already exists (`--full-corpus-live`). Without it, the paper's best F1 numbers are simulation-only while live API caps at F1=0.32. A reviewer will fixate on this gap.
 
-### Priority Scores
-| Criterion | Score | Delta |
-|-----------|-------|-------|
-| Novelty | 7/10 | 0 | 
-| Technical Soundness | 7/10 | 0 |
-| Benchmark Performance | 8/10 | **+1** |
-| Scalability | **5/10** | **-1** (k-sensitivity still missing) |
-| Research Maturity | **6/10** | **-1** (94.3% from one run) |
+**Key code issues found**:
+1. `apply_edits()` accesses private `_pairs` directly (encapsulation violation)
+2. Telemetry double-counting when multiple edited entities share pairs
+3. `dynamic_context_experiment.py` still uses manual edit path, not the new `apply_edits()` API
+4. Character-boundary chunking in full-corpus code may split entity profiles
 
-### The One Big Thing
-**Implement `monotone_attrs: set[str] | None = None` in `process_chunk()` at the library level.** This eliminates stochastic compliance, removes the 1,078 no-op retraction cycles, brings token overhead back toward V2's 1.14×, and unblocks everything else (k-sensitivity sweep, Tasks 3/6 V3, multi-run stability).
-
-### Critical Code Issues
-1. `process_chunk()` still lacks `monotone_attrs` parameter — the highest-priority code gap
-2. V3 Run 1 token data (4.84×) not documented in research log (only Run 2's 2.42× is stated)
-3. `k_sensitivity_v3.json` doesn't exist despite `run_k_sensitivity_sweep()` being implemented and ready to call
-4. `_retraction_count` conflates no-op cycles with permanent invalidations in the stats output
-
-### Experiments Required Before Submission
-1. Library-level `monotone_attrs` implementation + simplified REPL template
-2. Task 1 V3 multi-run stability (3 more runs → 5 total)
-3. Tasks 3/6 V3 to verify the falsifiable at-risk fraction prediction
-4. k-sensitivity sweep k ∈ {3, 7, 10} — **the paper's core scalability figure, still completely missing**
-5. Condition B V3 ($2, already implemented, never run)
+**3rd-Party Clarity Test**: Table 9 (full-corpus simulation) gets a **partial pass** — it proves pair-check savings but not token savings or LLM compliance at 19K chars/chunk. Tables 10 and 2c pass cleanly.
