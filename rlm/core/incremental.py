@@ -573,12 +573,14 @@ class IncrementalState:
 
         pairs_readded = 0
         new_pairs_from_edits = 0
+        pair_checks = 0
 
         if pair_checker:
             # Phase 2: Re-evaluate all retracted pairs with updated attributes
             for p in all_retracted:
                 a1 = self.entity_cache.get(p[0])
                 a2 = self.entity_cache.get(p[1])
+                pair_checks += 1
                 if a1 and a2 and pair_checker(a1, a2):
                     self.pair_tracker.add_pair(p[0], p[1])
                     pairs_readded += 1
@@ -595,10 +597,12 @@ class IncrementalState:
                     if self.pair_tracker.has_pair(eid, other_id):
                         continue
                     other_attrs = self.entity_cache.get(other_id)
+                    pair_checks += 1
                     if other_attrs and pair_checker(updated_attrs, other_attrs):
                         self.pair_tracker.add_pair(eid, other_id)
                         new_pairs_from_edits += 1
 
+        self._total_pair_checks += pair_checks
         pairs_after = len(self.pair_tracker)
         permanent = total_retracted - pairs_readded
         self._permanent_retractions += max(0, permanent)
@@ -609,6 +613,7 @@ class IncrementalState:
             "total_retracted": total_retracted,
             "pairs_readded": pairs_readded,
             "new_pairs_from_edits": new_pairs_from_edits,
+            "pair_checks": pair_checks,
             "permanent_retractions": max(0, permanent),
             "pairs_before": pairs_before,
             "pairs_after": pairs_after,
