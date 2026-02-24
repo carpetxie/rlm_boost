@@ -1,0 +1,95 @@
+{
+  "task": 1,
+  "k": 5,
+  "num_runs": 1,
+  "model": "gpt-4o-mini",
+  "temperature": null,
+  "gold_pairs_count": 8001,
+  "total_context_chars": 96689,
+  "runs": [
+    {
+      "run": 1,
+      "f1": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "total_input_tokens": 25730,
+      "total_output_tokens": 4686,
+      "compliance_rate": 1.0,
+      "wall_clock_sec": 100.45,
+      "total_wall_sec": 100.54,
+      "permanent_retractions": 0,
+      "noop_retractions": 0,
+      "per_turn_retractions": [
+        {
+          "turn": 1,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 2,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 3,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 4,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 5,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "f1": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "precision": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "recall": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "compliance_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "total_input_tokens": {
+      "mean": 25730,
+      "std": 0.0,
+      "min": 25730,
+      "max": 25730
+    },
+    "total_output_tokens": {
+      "mean": 4686,
+      "std": 0.0,
+      "min": 4686,
+      "max": 4686
+    },
+    "wall_clock_sec": {
+      "mean": 100.45,
+      "std": 0.0,
+      "min": 100.45,
+      "max": 100.45
+    }
+  }
+}
