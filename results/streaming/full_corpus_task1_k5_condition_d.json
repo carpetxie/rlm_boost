@@ -1,0 +1,140 @@
+{
+  "condition": "D_full_recompute_with_incremental_state",
+  "version": 4,
+  "task_idx": 1,
+  "model": "gpt-4o-mini",
+  "num_chunks": 5,
+  "max_chunk_chars": 19337,
+  "context_type": "labeled_sequential",
+  "strategy": "reset_and_replay_all_chunks_each_turn",
+  "qualifying_labels": [
+    "numeric value",
+    "location"
+  ],
+  "replay_correct_turns": 5,
+  "f1_progression": [
+    {
+      "chunk": 1,
+      "chunk_idx": 0,
+      "replay_correct": true,
+      "chunks_processed": 1,
+      "pairs": 1326,
+      "pair_checks_total": 4753,
+      "f1": 0.2843,
+      "precision": 1.0,
+      "recall": 0.1657,
+      "tp": 1326,
+      "fp": 0,
+      "fn": 6675,
+      "input_tokens": 36980,
+      "output_tokens": 2615,
+      "elapsed_sec": 61.66,
+      "iteration_count": 9
+    },
+    {
+      "chunk": 2,
+      "chunk_idx": 1,
+      "replay_correct": true,
+      "chunks_processed": 2,
+      "pairs": 3403,
+      "pair_checks_total": 11585,
+      "f1": 0.5968,
+      "precision": 1.0,
+      "recall": 0.4253,
+      "tp": 3403,
+      "fp": 0,
+      "fn": 4598,
+      "input_tokens": 5341,
+      "output_tokens": 1262,
+      "elapsed_sec": 27.59,
+      "iteration_count": 2
+    },
+    {
+      "chunk": 3,
+      "chunk_idx": 2,
+      "replay_correct": true,
+      "chunks_processed": 3,
+      "pairs": 4656,
+      "pair_checks_total": 16702,
+      "f1": 0.7357,
+      "precision": 1.0,
+      "recall": 0.5819,
+      "tp": 4656,
+      "fp": 0,
+      "fn": 3345,
+      "input_tokens": 73307,
+      "output_tokens": 6335,
+      "elapsed_sec": 127.29,
+      "iteration_count": 9
+    },
+    {
+      "chunk": 4,
+      "chunk_idx": 3,
+      "replay_correct": true,
+      "chunks_processed": 4,
+      "pairs": 5995,
+      "pair_checks_total": 22414,
+      "f1": 0.8567,
+      "precision": 1.0,
+      "recall": 0.7493,
+      "tp": 5995,
+      "fp": 0,
+      "fn": 2006,
+      "input_tokens": 13794,
+      "output_tokens": 3013,
+      "elapsed_sec": 63.65,
+      "iteration_count": 3
+    },
+    {
+      "chunk": 5,
+      "chunk_idx": 4,
+      "replay_correct": true,
+      "chunks_processed": 5,
+      "pairs": 8001,
+      "pair_checks_total": 30983,
+      "f1": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "tp": 8001,
+      "fp": 0,
+      "fn": 0,
+      "input_tokens": 106653,
+      "output_tokens": 9760,
+      "elapsed_sec": 219.96,
+      "iteration_count": 9
+    }
+  ],
+  "final_f1": 1.0,
+  "final_precision": 1.0,
+  "final_recall": 1.0,
+  "total_input_tokens": 236075,
+  "total_output_tokens": 22985,
+  "total_wall_clock_sec": 500.16,
+  "per_turn_tokens": [
+    {
+      "turn": 1,
+      "input": 36980,
+      "output": 2615
+    },
+    {
+      "turn": 2,
+      "input": 5341,
+      "output": 1262
+    },
+    {
+      "turn": 3,
+      "input": 73307,
+      "output": 6335
+    },
+    {
+      "turn": 4,
+      "input": 13794,
+      "output": 3013
+    },
+    {
+      "turn": 5,
+      "input": 106653,
+      "output": 9760
+    }
+  ]
+}
