@@ -190,9 +190,8 @@ def run_no_retraction_counterfactual(
                     if other_id == uid:
                         continue
                     other_attrs = incr_without.entity_cache.get(other_id)
-                    canonical = (min(uid, other_id), max(uid, other_id))
                     if other_attrs and check_pair(updated_attrs, other_attrs):
-                        if canonical not in incr_without.pair_tracker._pairs:
+                        if not incr_without.pair_tracker.has_pair(uid, other_id):
                             missing_new_pairs += 1
 
         print(f"\n  WITHOUT RETRACTION:")
@@ -401,7 +400,9 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Full-corpus + counterfactual experiments")
-    parser.add_argument("--counterfactual", action="store_true", help="Run no-retraction counterfactual")
+    parser.add_argument("--counterfactual", action="store_true", help="Run no-retraction counterfactual (25K)")
+    parser.add_argument("--full-corpus-counterfactual", action="store_true",
+                        help="Run no-retraction counterfactual on full 96K corpus")
     parser.add_argument("--full-corpus", action="store_true", help="Run full-corpus A vs D simulation")
     parser.add_argument("--full-corpus-live", action="store_true",
                         help="Run full-corpus A+D with live API (needs OPENAI_API_KEY)")
@@ -424,6 +425,21 @@ def main():
             num_edits_list=edit_counts,
         )
         out_path = output_dir / f"no_retraction_counterfactual_task{args.task}.json"
+        out_path.write_text(json.dumps(results, indent=2, default=str))
+        print(f"\nSaved to {out_path}")
+
+    if args.full_corpus_counterfactual:
+        total_chars = len(labeled_context)
+        max_chunk_chars = total_chars // args.k
+        edit_counts = [int(x) for x in args.edits.split(",")]
+        results = run_no_retraction_counterfactual(
+            labeled_context=labeled_context,
+            task_idx=args.task,
+            num_chunks=args.k,
+            max_chunk_chars=max_chunk_chars,
+            num_edits_list=edit_counts,
+        )
+        out_path = output_dir / f"no_retraction_counterfactual_full_corpus_task{args.task}_k{args.k}.json"
         out_path.write_text(json.dumps(results, indent=2, default=str))
         print(f"\nSaved to {out_path}")
 
@@ -508,8 +524,8 @@ def main():
         print(f"  | Input Tokens  | {ta:>15,} | {td:>17,} |")
         print(f"  | Token Savings | {savings:>14.1%}  | {'baseline':>17} |")
 
-    if not (args.counterfactual or args.full_corpus or args.full_corpus_live):
-        print("No experiment selected. Use --counterfactual, --full-corpus, or --full-corpus-live")
+    if not (args.counterfactual or args.full_corpus_counterfactual or args.full_corpus or args.full_corpus_live):
+        print("No experiment selected. Use --counterfactual, --full-corpus-counterfactual, --full-corpus, or --full-corpus-live")
 
 
 if __name__ == "__main__":
