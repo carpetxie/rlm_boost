@@ -184,6 +184,8 @@ def run_condition_a_v4(
     verbose: bool = False,
     run_id: int = 1,
     temperature: float | None = None,
+    history_strategy: str | None = None,
+    history_window: int | None = None,
 ) -> dict:
     """
     Condition A V4 (Library-Level Monotone Fix): Incremental RLM.
@@ -244,6 +246,16 @@ def run_condition_a_v4(
         max_iterations=6,
         verbose=verbose,
     )
+
+    # Override history strategy if requested (for aggressive pruning experiments)
+    if history_strategy is not None:
+        from rlm.core.history_manager import HistoryManager
+        window = history_window if history_window is not None else 2
+        rlm.history_manager = HistoryManager(
+            strategy=history_strategy,
+            max_recent_iterations=window,
+        )
+        print(f"  History override: strategy={history_strategy}, window={window}")
 
     f1_progression = []
     turn_tokens = []
