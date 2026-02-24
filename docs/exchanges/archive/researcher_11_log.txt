@@ -1,3 +1,24 @@
+All tasks are complete. Here's a summary of what was accomplished in this iteration:
 
+## Iteration 20 Summary
 
-Condition D Task 3 completed — already captured: 77.2% token savings, F1(A)=F1(D)=F1(C)=0.3237, quality ratio 100%. All 5 background experiments from iteration 16 have now finished successfully, and all results are documented in `docs/research_log.md` and `docs/exchanges/researcher_response.md`.
+### Code Changes
+1. **Fixed `apply_edits()` pair_checks tracking** in `rlm/core/incremental.py` — Phase 2 and Phase 3 now properly increment `_total_pair_checks` and return `pair_checks` in the result dict
+2. **Added TODO comment** to `compute_gold_pairs_with_edits()` about simplified qualifying check
+3. **Created `eval/multi_run_stability.py`** — new multi-run stability experiment runner
+4. **Created `eval/plot_per_turn_tokens.py`** — per-turn token comparison figure generator
+5. **Created `scripts/run_stability.sh`** — convenience runner for stability experiments
+
+### Experiments Run (All Live API)
+| Experiment | Task | Runs | Key Result |
+|-----------|------|------|------------|
+| **Exp 51: Stability** | Task 1, k=5 | n=3 | F1=0.979±0.019, P=1.000±0.000 |
+| **Exp 52a: Cross-task** | Task 3, k=5 | A+D | F1=0.993 (identical), 71.4% savings, 2.7× speedup |
+| **Exp 52b: Cross-task** | Task 6, k=5 | A+D | F1=0.993 (identical), 90.9% savings, 4.9× speedup |
+| **Exp 53: Figure** | Existing data | — | Per-turn token plot saved |
+
+### Key Findings
+1. **F1=1.0 was a lucky single run** — honest result is F1=0.979±0.019 across 3 runs. Two runs triggered retractions at Turn 3 (2,700 retractions, 1,387 permanent), reducing recall to 0.938.
+2. **P=1.0 is invariant** across all tasks, all runs (the structural guarantee holds)
+3. **Token savings generalize**: 71% (Task 3) to 91% (Task 6) — the structural formula is a lower bound
+4. **Cross-task validation complete**: 3 tasks at full corpus, all showing near-parity F1 with substantial savings
