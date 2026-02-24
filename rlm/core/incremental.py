@@ -587,6 +587,7 @@ class IncrementalState:
 
             # Phase 3: Check for NEW pairs (edited entities × all existing)
             edited_ids = set(edits.keys())
+            checked_in_edit_sweep: set[tuple[str, str]] = set()
             for eid in edited_ids:
                 updated_attrs = self.entity_cache.get(eid)
                 if not updated_attrs:
@@ -596,6 +597,11 @@ class IncrementalState:
                         continue
                     if self.pair_tracker.has_pair(eid, other_id):
                         continue
+                    # Deduplicate: if both entities are edited, only check once
+                    canonical = (min(eid, other_id), max(eid, other_id))
+                    if canonical in checked_in_edit_sweep:
+                        continue
+                    checked_in_edit_sweep.add(canonical)
                     other_attrs = self.entity_cache.get(other_id)
                     pair_checks += 1
                     if other_attrs and pair_checker(updated_attrs, other_attrs):
