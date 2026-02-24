@@ -4,195 +4,207 @@ STATUS: CONTINUE
 
 ## Overall Assessment
 
-Iteration 16 represents a genuinely mature research result: the Condition D fair comparison is now replicated across 3 tasks (4 experiments) with 100% quality retention and 77-86% token savings. The CRITICAL GAP is resolved. The paper's empirical core is solid — what remains is (1) the absence of any dynamic context experiment after 16 iterations despite this being the thesis motivation, (2) the narrow evaluation scope (single corpus, single model, 3 tasks from the same task family), and (3) a subtle but important gap between what the F1 numbers actually measure (coverage-constrained pair finding on a 25K-char window) vs what the paper claims (near-oracle incremental processing). The research is approaching submission quality but needs two specific experiments to strengthen the claims from "works on OOLONG-Pairs with gpt-4o-mini" to "principled framework with understood limitations."
+Iteration 20 represents a genuinely strong research result. The full-corpus live API experiments (Table 14) deliver the paper's headline: F1≥0.968 across 3 tasks with 71–91% token savings and P=1.0 invariant across all runs, turns, and tasks. The multi-run stability (F1=0.979±0.019, n=3) is honest and publishable. The evidence base — 13 documented contributions, fair D-vs-A comparison, dynamic context POC, structural formula, cross-task validation — is approaching submission quality. Three gaps remain before this is paper-ready: (1) all results use a single model (gpt-4o-mini) — a single cross-model run would cost $0.50 and eliminate the most obvious reviewer objection; (2) the retraction stochasticity finding (Runs 1&2 lose 498 pairs via spurious retractions, Run 3 has zero) deserves a deeper investigation that could itself become a paper contribution; and (3) Tasks 3 and 6 at full corpus have n=1 each — even n=2 would strengthen the cross-task claim.
 
 ## Reflection on Prior Feedback
 
 **Resolved — not re-raising:**
-- Condition D replication: done (2 runs, consistent). Accepted.
-- Cross-task Condition D: done (Tasks 3, 6). Accepted.
-- Turn 2 token anomaly: explained as efficient template execution. Researcher pushback accepted.
-- `process_chunk()` mutation docstring: added. Accepted.
-- Condition D code generation tests: 5 tests added. Accepted.
-- Paper table cherry-picking: tables show both 5-run mean and best run. Accepted.
-- Dynamic context experiment deferred: accepted as reasonable prioritization within iteration budget.
+- Multi-run stability at full corpus: DONE. Honest F1=0.979±0.019 reporting. Accepted.
+- Full-corpus Tasks 3 and 6: DONE. Both show F1=0.993, identical A=D. Accepted.
+- Per-turn token figure: DONE. Figure generated from Exp 49 data. Accepted.
+- `apply_edits()` pair_checks tracking: DONE. Phase 2 + Phase 3 now track correctly. 196 tests pass. Accepted.
+- `select_entities_to_edit()` sorted dict: Already fixed per researcher. Accepted.
+- `compute_gold_pairs_with_edits()` docstring: TODO comment added. Accepted.
 
-**Acknowledged from researcher pushbacks:**
-- Turn 2 anomaly was correctly identified as non-anomalous by the researcher. My prior concern was wrong.
-- Dynamic context was correctly deferred to focus on higher-priority D replication and cross-task D. Not re-raising the deferral — but escalating the strategic importance (see below).
+**Pushbacks accepted — not re-raising:**
+- Cross-model validation deferred: Accepted as documented limitation. However, I am ESCALATING this (see below) because all other blocking items are now resolved, making this the most impactful remaining experiment.
+- Headline change from F1=1.0 to F1=0.979±0.019: Researcher's decision is correct. Honest reporting strengthens the paper.
 
 ## Scores
 
 | Criterion | Score | Delta | Comment |
 |-----------|-------|-------|---------|
-| Novelty | 7/10 | +0 | Monotone accumulation condition, retraction taxonomy (360×), at-risk fraction predictor, library-vs-template principle are independently publishable. No dynamic context experiment means the "Dynamic RLM" thesis motivation remains aspirational. Score stays until dynamic context has at least one experiment. |
-| Technical Soundness | 8.5/10 | +0.5 | 4 Condition D experiments across 3 tasks. 5-run stability (σ=0.004). k-sensitivity measured. Retraction accounting corrected. Code generation tested. The implementation matches the claims. Half-point increment for cross-task D replication. |
-| Benchmark Performance | 8/10 | +0 | 77-86% token savings at 100% quality. k=3 at 97.1% A/C with σ=0.000. P=1.0 universal. The absolute F1 values (0.32-0.34) are low because of the 25K coverage ceiling — this is understood and correctly characterized. |
-| Scalability | 6/10 | +0 | Still single-corpus (N=231), single-model (gpt-4o-mini), 3 tasks from symmetric-monotone family. Task 11 non-monotone experiment shows F1=0.047 (protocol works but accuracy is poor). No data beyond k=10 or beyond OOLONG-Pairs. |
-| Research Maturity | 7.5/10 | +0.5 | Paper tables comprehensive. Fair comparison exists. Multi-run stability confirmed. Missing: dynamic context experiment, cross-model validation, and paper framing finalization. |
+| Novelty | 8/10 | +0.5 | Dynamic context validated end-to-end (Exp 45-46), no-retraction counterfactual quantifies retraction VALUE (99-620 invalid pairs), retraction stochasticity is a genuine new finding. Full-corpus F1 near 1.0 removes the "barely works" perception. The contribution list (13 items) is comprehensive. Score increase reflects the accumulation of findings into a coherent story. |
+| Technical Soundness | 8.5/10 | +0 | Core library is clean. `apply_edits()` now tracks pair_checks. 196 tests, 202 collected. Fair D-vs-A comparison across 3 tasks. Retraction accounting fixed (cumulative to last). One minor code issue found (see below). No temperature control in experiments is a documentation gap. |
+| Benchmark Performance | 8.5/10 | +2.0 | This is the biggest score jump. Full-corpus F1=0.979±0.019 (Task 1) and F1=0.993 (Tasks 3,6) with 71-91% savings and P=1.0. The "F1=0.32 presentation problem" is fully resolved. The results are now strong enough to lead a paper. |
+| Scalability | 6.5/10 | +0.5 | Full-corpus (96K chars) validated. 2.7-4.9x wall-clock speedup. BUT: single model, single corpus, N=231 entities. The cross-model gap is the biggest remaining scalability concern. Half-point for demonstrating 19K chars/chunk works (up from 5K). |
+| Research Maturity | 8/10 | +0.5 | Paper-ready data exists for all major claims. Tables 14-15 are publication-grade. Multi-run stability, cross-task validation, per-turn figure all complete. Missing: paper draft, cross-model validation, deeper retraction stochasticity analysis. |
 
 ## Architecture Review
 
-### The Core Architecture Is Sound
+### Core Library: Sound
 
-The `IncrementalState` / `EntityCache` / `PairTracker` system in `rlm/core/incremental.py` is well-implemented. After reviewing the code end-to-end:
+`rlm/core/incremental.py` is well-engineered. After reviewing the complete file (650+ lines):
 
-- Monotone merge logic (lines 346-364) correctly handles all four cases: (truthy→truthy, truthy→falsy preserve, falsy→truthy genuine change, falsy→falsy)
-- No-op update detection (line 360-364) correctly skips `updated_ids` when all monotone attrs unchanged
-- Idempotency guard (lines 311-319) prevents Failure Mode C with O(1) cached return
-- `checked_in_updated_sweep` deduplication (lines 441-460) prevents inflated pair_checks
-- `retract_entity()` partner cleanup (lines 167-170) prevents double-counting
+- `process_chunk()` monotone merge logic: correct, well-documented.
+- `apply_edits()`: Phase 1 (retract), Phase 2 (re-evaluate), Phase 3 (new discovery) are correctly ordered. The `has_pair()` guard prevents double-addition.
+- Idempotency guard: correct. O(1) cached return on duplicate `process_chunk()` calls.
+- `retract_entity()` partner cleanup (lines 167-170): prevents double-counting in retraction. This is a subtle correctness property that took multiple iterations to get right.
+- `get_stats()` retraction breakdown (noop vs permanent): well-documented, useful for diagnostics.
 
-**No new code issues found in the core library.** The implementation quality has improved substantially over iterations.
+### Minor Code Issue: `apply_edits()` Phase 3 Double-Check Between Edited Entities
 
-### Remaining Architectural Limitation: Token Cost Reporting
+When two edited entities A and B are both in `edits`, and neither pair (A,B) existed before or was re-added in Phase 2:
+- A's sweep: checks (A,B), `has_pair` returns False, `pair_checks += 1`. If checker fails: pair not added.
+- B's sweep: checks (B,A), `has_pair` returns False (still), `pair_checks += 1`. Checks again.
 
-The paper claims "77-86% token savings" but Condition D's token counts are highly variable across runs: Task 1 D went from 246K (Run 1) to 80K (Run 2) — a 3× range — entirely due to stochastic LLM iteration counts. This means the "savings" number depends heavily on how many iterations the D baseline happens to use.
+This inflates `pair_checks` by up to C(E,2) where E = len(edits). For E=10, that's 45 extra checks — negligible at scale. But it's inconsistent with `process_chunk()` which has `checked_in_updated_sweep` deduplication (lines 450-469).
 
-**Concrete issue**: The 79.8% savings (246K vs 49K) and 77.1% savings (80K vs 18K) both compare different-variance numerators and denominators. The savings percentage is stable (77-80%) but this stability is somewhat coincidental — both A and D token counts fluctuate, and the ratio happens to be stable because both scale with the same stochastic iteration-count factor.
+**Fix** (3 lines, non-blocking):
+```python
+# Add before the Phase 3 loop:
+checked_in_edit_sweep: set[tuple[str, str]] = set()
+# Inside the inner loop, before pair_checks += 1:
+canonical = (min(eid, other_id), max(eid, other_id))
+if canonical in checked_in_edit_sweep:
+    continue
+checked_in_edit_sweep.add(canonical)
+```
 
-**Recommendation**: Report the **structural savings formula** as the primary metric: chunk-reads(D) = k(k+1)/2, chunk-reads(A) = k, structural savings = 1 - 2/(k+1). At k=5: savings = 1 - 2/6 = 66.7%. This is deterministic and more defensible than stochastic API token ratios. Report the empirical 77-86% as "empirical savings exceed the structural bound due to reduced per-turn prompt overhead in shorter contexts."
+### Observation: No Temperature Control in Key Experiments
+
+`eval/label_aware_v4_experiment.py` and `eval/multi_run_stability.py` do not set `temperature`. Only `eval/live_api_experiment.py` sets `temperature=0.0`. This means all headline experiments use the OpenAI default (temperature=1.0 for gpt-4o-mini), which is the source of the retraction stochasticity. This is not a bug — it's the realistic operating condition — but it should be documented in the paper, and a `temperature=0` ablation would directly test whether the ±0.019 F1 variance can be eliminated.
 
 ## Novelty Assessment
 
-### What's Genuinely New (Strong)
+### What's Genuinely Novel (Strong — 8/10)
 
-1. **Non-monotonic retraction mechanism for LLM incremental computation**: The retraction taxonomy (360× range: 44 to 15,824 retractions across task types) with mechanistic explanation (temporal asymmetry, selectivity-driven retraction density) is a genuine contribution. No prior work characterizes retraction patterns in LLM-driven incremental pipelines.
+1. **IncrementalState as a reusable library** for LLM-driven incremental computation. Entity cache + pair tracker + retraction + monotone merge is a complete, tested abstraction. 650+ lines of production-quality code with 196 tests.
 
-2. **Monotone attribute accumulation as a correctness condition**: The discovery that "at least one" predicates require monotone accumulation, the 2-line fix, and the 30pp A/C improvement is a clean result with practical value.
+2. **P=1.0 invariance**: Zero false positives across 7 experiment conditions (3 tasks x up to 3 runs), 35 total turns. This is not prompt engineering luck — it's a structural property of the entity-pair decomposition. The paper should quantify this: "0 false positives across 35 turns and 7 experimental conditions."
 
-3. **At-risk fraction as a predictive diagnostic**: Ordering prediction (Task 6 > Task 3 > Task 1 matches ΔA/C ordering) is validated. This is a useful corpus-level diagnostic.
+3. **Retraction stochasticity as a finding** (NEW — underemphasized): Runs 1&2 of the stability experiment trigger 2,700 retractions at Turn 3, permanently losing 1,387 pairs (498 unique gold pairs, recall drop to 0.938). Run 3 has zero retractions. This reveals that LLM parsing stochasticity interacts with the retraction mechanism in a predictable way: the model sometimes "re-parses" entities at chunk boundaries, triggering spurious attribute updates that fire retraction. The monotone_attrs optimization prevents this for qualifying-status attributes, but non-monotone attributes remain vulnerable.
 
-4. **Library-vs-template principle**: Demonstrating that moving invariants to the library eliminates stochastic compliance failures (V3 60-100% → V4 100%) is a practical architectural insight.
+   **This is itself a publishable finding**: "LLM parsing stochasticity creates a recall-precision tradeoff through the retraction mechanism. Retraction guarantees P=1.0 (no invalid pairs) at the cost of occasional false retraction (valid pairs removed by spurious attribute updates). The recall variance sigma=0.036 quantifies this tradeoff."
 
-### What's Missing for Higher Novelty Score
+4. **Library-vs-template principle**: V3 to V4 demonstrates that invariants belong in library code, not LLM prompts. The compliance jump (60-100% to 100%) and retraction elimination (1,078 to 0) from a single `monotone_attrs` kwarg is a clean, reusable insight.
 
-**The "Dynamic RLM" thesis framing has zero supporting experiments after 16 iterations.** All experiments process static OOLONG-Pairs data chunked sequentially. The dynamic context promised in the thesis motivation — entities changing attributes, new information invalidating old conclusions, streaming real-time data — is tested only in simulation (Experiment 4, retraction analysis). The retraction mechanism exists and is tested in unit tests, but there is no live API experiment where context actually changes between turns.
+5. **At-risk fraction as a predictive diagnostic**: Ordering prediction validated across 3 tasks (Task 6 Delta > Task 3 Delta > Task 1 Delta matches at-risk fraction ordering 31.7% > 26.6% > 23.2%). This is a practical tool for practitioners.
 
-This is not a blocking issue for the current paper scope (correctly reframed as "Incremental Computation for Sequential Context Processing"). But it means the paper's contribution is **incremental computation**, not **dynamic computation**. The "Dynamic RLM" branding oversells the current evidence.
+6. **Separated counterfactual**: The 3-way ablation (full, retract-only, neither) cleanly separates retraction's precision impact (68% of total F1 protection) from new-pair discovery's recall impact (32%). This is good experimental design.
 
-### What Would Push Novelty to 8/10
+### What Would Push Novelty to 9/10
 
-One focused experiment: **genuine entity attribute change across turns**. Not a simulation — a live API run where:
-- Turn 1: Process chunk with entities {A: qualifying=True}
-- Turn 2: Inject modified chunk where entity A's data changed (e.g., new label that would make A non-qualifying under a different predicate)
-- Turn 3: Verify retraction mechanism fires correctly in the live pipeline
-
-Cost: $1-2. Time: 2 hours. This transforms the retraction taxonomy from "simulation finding" to "empirically demonstrated in live LLM pipeline."
+- **Cross-model evidence**: Showing the same P=1.0 invariance and similar savings on a non-OpenAI model (Claude, Gemini) would demonstrate that the findings are about the *architecture*, not about gpt-4o-mini's specific behavior.
+- **Retraction stochasticity characterization**: A temperature=0 ablation that shows sigma approaching 0 would confirm the mechanism. Then the paper can present a clean story: "At temperature=0, retraction is deterministic (sigma=0). At default temperature, LLM stochasticity creates a bounded recall variance (sigma=0.019 in F1) while precision remains invariant (P=1.0)."
 
 ## 3rd-Party Clarity Test
 
-### Experiment: Condition D vs A (Table 2c) — **PASSES**
+### Table 14 (Cross-Task Full-Corpus, A vs D): PASSES
 
-A skeptical engineer reads:
-- **What's compared**: Full-recompute (same framework, reset+replay all chunks) vs incremental (new chunk only)
-- **Why fair**: Both use IncrementalState with monotone_attrs. Only difference is strategy.
-- **Why result matters**: 77-86% token savings at 100% quality. 4 experiments, 3 tasks, 2 replications.
+A skeptical engineer reads: "Same framework. A processes each chunk once. D resets and replays all chunks. F1 is identical or near-identical (within 0.021). A saves 71-91% of tokens. Tested across 3 tasks with 3 runs on Task 1."
 
-This is the strongest experiment in the project. Clean, fair, unambiguous.
+This is clear, fair, and meaningful. The table includes all necessary information: task, gold pairs, F1 for both conditions, precision, input tokens, savings, wall-clock, speedup. **This is the paper's central table and it's ready.**
 
-### Experiment: A/C Ratio (Table 1, Table 3) — **PASSES with caveat**
+**Minor improvement**: Add the structural prediction column (1-2/(k+1) = 66.7%) alongside empirical savings to show the theoretical lower bound.
 
-A skeptical engineer reads:
-- **What's compared**: Incremental (k=5, 5K/chunk) vs single-pass oracle (25K)
-- **Fair?**: Yes — same total context budget.
-- **Why it matters**: 93.7% of oracle quality.
+### Table 15 (Task 1 Multi-Run Stability): PASSES
 
-**Caveat**: The absolute F1 values (0.32) are low because of the 25K coverage ceiling (only 20.7% of gold pairs are reachable in 25K chars). A reviewer might ask "why not run on the full 96K context?" The answer is that Condition C Full achieves F1=1.0 — but running Condition A on 96K chars (k=5, 19.2K/chunk) would be the more compelling comparison. This experiment hasn't been run. The 25K constraint is practical (API cost), but a reviewer may see it as artificial.
+Three runs with mean and standard deviation. F1=0.979±0.019, P=1.000±0.000. The retraction stochasticity explanation is honest and data-driven. A skeptical engineer would see this as credible variance characterization.
 
-### Experiment: Naive vs Incremental (Table 2b) — **Correctly labeled as structural, not strawman**
+**Suggestion**: Add a "Retractions" column to Table 15 showing [1387, 1387, 0] permanent retractions per run. This makes the mechanism of the variance immediately visible.
 
-The naive comparison (F1=0 vs F1=0.3228) is correctly labeled as "structural advantage" in the paper tables. The naive approach fails at the framework level, not the efficiency level. The researcher has correctly separated this from the fair D vs A comparison. **No longer blocking** — properly labeled.
+### Dynamic Context Tables (Tables 8, 10, 12, 13): PASSES
 
-### Experiment: At-Risk Fraction Prediction (Table 3) — **PASSES**
+The separated counterfactual (Table 12) is the strongest version. "With retraction: P=1.0, F1=0.979. Without: P=0.812, F1=0.845. Retraction prevents 240 invalid pairs." Unambiguous.
 
-The prediction ordering (ΔA/C: Task 6 > Task 3 > Task 1) matches at-risk fraction ordering. Validated across 3 tasks. A skeptical engineer would accept this as a validated diagnostic tool.
+### Headline Comparison Table: PASSES
 
-### MISSING Experiment: Dynamic Context — **BLOCKING for "Dynamic RLM" framing, NOT blocking for "Incremental Sequential Processing" framing**
+The data exists for the mandated comparison format:
 
-No experiment tests context that actually changes. All experiments chunk static data. If the paper uses "Dynamic" in the title/framing, this is a blocking gap. If reframed as "Sequential Incremental," the gap becomes "future work."
+| Approach | Total Context | Turns | Input Tokens | Cost | F1 | Time |
+|----------|-------------|-------|--------------|------|-----|------|
+| D (full recompute) | 96K | 5 | 236,075 | $0.049 | 1.000 | 500s |
+| A (incremental) | 96K | 5 | 42,891±4,948 | ~$0.010 | 0.979±0.019 | 162s |
+
+The head-to-head comparison is clear. **No blocking issues in any experiment.**
+
+### MISSING: Cross-Model Comparison — Soft Block for Scalability Claim
+
+All 7 experiment conditions use gpt-4o-mini. A reviewer will ask: "Is P=1.0 a property of the architecture or of this particular model?" The answer is almost certainly "architecture" (the structured entity-pair decomposition prevents FPs regardless of model), but without a single cross-model data point, this is an assertion not evidence.
 
 ## Experiment Critique
 
 ### What's Solid
 
-1. **Multi-run stability**: 5 runs for k=5 (σ=0.004), 4 runs for k=3 (σ=0.000). This is publication-grade reproducibility evidence.
-2. **Cross-task generalization**: 3 tasks with consistent results. At-risk predictor validated.
-3. **Condition D fair comparison**: 4 experiments, 3 tasks. The headline claim is well-supported.
-4. **k-sensitivity**: k ∈ {3,5,7,10} with compliance analysis. Practical recommendation (k≤5) is data-driven.
+1. **Full-corpus live API**: F1=0.979±0.019 with 83.9% token savings. This is the paper's headline. It's real, reproduced, and honestly reported.
+2. **Cross-task generalization**: 3 tasks, consistent results. P=1.0 universal. Savings 71-91%.
+3. **Multi-run stability**: n=3 for Task 1 with variance quantified. sigma_F1 = 0.019, sigma_P = 0.000.
+4. **Dynamic context**: Simulation + live API. No-retraction counterfactual quantifies value. Separated ablation is clean.
+5. **Structural formula**: 1-2/(k+1) is deterministic, clean, and the right primary metric.
+6. **Per-turn token figure**: Visual proof of O(k) vs O(k^2).
 
 ### What's Missing (in priority order)
 
-1. **Dynamic context proof-of-concept** (HIGH — deferred twice now): The researcher has deferred this across iterations 15 and 16. The deferral was reasonable each time (higher-priority items existed). But at iteration 16, all higher-priority items are resolved. This is now the #1 experiment.
+1. **Cross-model validation (HIGH — $0.50, 30 min)**: Run Task 1, k=5, full corpus (96K) with gpt-4o (or claude-3.5-sonnet via API). A single run that shows P=1.0 and similar savings pattern would address the most likely reviewer objection. If the pattern differs, that's also a publishable finding.
 
-2. **Full-corpus incremental run** (MEDIUM): Run Condition A vs C on the full 96K corpus (k=5, ~19K/chunk). The current 25K budget constrains all F1 values to ≤0.34. Showing that incremental processing scales to the full corpus would strengthen the scalability claim. Cost: ~$0.50.
+2. **Temperature=0 ablation (MEDIUM — $0.02, 15 min)**: Run Task 1, k=5, full corpus, gpt-4o-mini, temperature=0. If retraction variance disappears (sigma approaches 0, F1 approaches 1.0 consistently), this confirms the mechanism. If it doesn't, the source is different than assumed. Either outcome adds to the paper.
 
-3. **Cross-model sanity check** (LOW-MEDIUM): One run of the headline experiment (Task 1, k=5, V4) with a different model (e.g., gpt-4o or claude-3.5-sonnet). If the same patterns hold (P=1.0, similar A/C ratio), the contribution generalizes beyond gpt-4o-mini. If patterns differ, that's a finding worth reporting. Cost: ~$0.50.
+3. **Tasks 3 and 6 second run (MEDIUM — $0.10, 30 min)**: Currently n=1 each at full corpus. Even n=2 would confirm the zero-retraction stability observed in first runs.
+
+4. **Paper draft (HIGH value — no cost, 4-8 hrs)**: The data is ready. Start writing. The remaining experiments add at most one table row each.
 
 ## The One Big Thing
 
-**Run the dynamic context proof-of-concept.** This has been the #1 deferred item for 3 iterations. Every blocking issue that was higher priority is now resolved. The retraction mechanism — the most architecturally novel component — has never been tested with actual dynamic data in a live API run. One $1-2 experiment that demonstrates a retraction firing correctly on genuinely changed entity data would:
+**Run the cross-model validation.**
 
-1. Validate the retraction mechanism end-to-end (not just in simulation)
-2. Support the "Dynamic RLM" thesis framing (currently unsupported)
-3. Demonstrate the 360× retraction taxonomy on real data
-4. Differentiate this work from simple chunked processing (which doesn't need retractions)
+This has been deferred for 5+ iterations. Every higher-priority item is now resolved. The cost is $0.50 for a single run. The paper currently makes claims about "the architecture" but tests only one model. A reviewer will see this gap immediately.
 
-**Concrete design**: Use OOLONG-Pairs Task 1, but modify the context between turns:
-- Turn 1 (chunk 0): Normal processing, entities parsed with labels
-- Turn 2 (chunk 1): Normal incremental processing
-- Turn 3 (modified chunk): Re-inject chunk 0's text but with 5 entities' labels changed (e.g., replace "numeric value" with "description"). This simulates a document edit.
-- Measure: (a) retraction fires for the 5 modified entities, (b) pair tracker correctly updates, (c) F1 computed against the NEW ground truth (reflecting the edits)
+**Concrete implementation**: In `eval/multi_run_stability.py`, add `--model gpt-4o` flag (already supported). Run:
+```bash
+python eval/multi_run_stability.py --task 1 --k 5 --num-runs 1 --model gpt-4o
+```
 
-This is a 2-hour implementation using the existing `run_condition_a_v4()` framework with a context modification step inserted between turns.
+Expected outcomes and their impact:
+- **P=1.0 + similar savings**: Paper can claim "architecture-level property, validated on 2 models." Scalability score rises to 7.5/10.
+- **P < 1.0**: Interesting finding — the structured decomposition's precision guarantee is model-dependent. Document as scope boundary.
+- **Compliance < 100%**: The V4 template may need model-specific tuning. Document and note that the REPL template is the prompt-sensitive component, not the IncrementalState library.
+
+Any of these outcomes strengthens the paper. Only the current state (no cross-model data) is a weakness.
 
 ## Specific Experiments to Run
 
-1. **Dynamic context proof-of-concept ($1-2, 2 hrs) — HIGHEST**:
-   - Design above. Validates retraction mechanism on live data.
-   - Success criterion: retractions fire for modified entities AND final pairs are correct per updated ground truth.
+1. **Cross-model validation ($0.50, 30 min) — HIGHEST**:
+   - Task 1, k=5, full corpus, gpt-4o (single run)
+   - Measure: F1, P, compliance, token savings, retractions
+   - Use existing `multi_run_stability.py --model gpt-4o`
 
-2. **Full-corpus incremental run ($0.50, 1 hr) — MEDIUM**:
-   - Task 1, k=5, ~19K chars/chunk, total 96K context
-   - Condition A (incremental) vs Condition C (single-pass oracle on full 96K)
-   - Expected: higher absolute F1 (potentially approaching 1.0 since C Full = 1.0)
-   - This removes the "artificial 25K budget" critique
+2. **Temperature=0 ablation ($0.02, 15 min) — MEDIUM**:
+   - Task 1, k=5, full corpus, gpt-4o-mini, temperature=0
+   - Add `--temperature 0` flag to experiment script (requires passing through to RLM constructor or LM client)
+   - Measure: is F1 variance eliminated? Does Run 1 = Run 2 = Run 3?
+   - Would confirm or refute "retraction stochasticity is temperature-dependent"
 
-3. **Cross-model sanity check ($0.50, 30 min) — LOW-MEDIUM**:
-   - Task 1, k=5, V4 with gpt-4o
-   - Report: F1, A/C, compliance, P
-   - Even a single run provides cross-model evidence
+3. **Tasks 3 and 6 second run ($0.10, 30 min) — MEDIUM**:
+   - `python eval/multi_run_stability.py --task 3 --num-runs 1`
+   - `python eval/multi_run_stability.py --task 6 --num-runs 1`
+   - Confirm zero-retraction stability seen in first runs
 
-4. **Structural savings formula derivation ($0, 30 min) — LOW but high paper value**:
-   - Derive and report: chunk-reads(D) = k(k+1)/2, chunk-reads(A) = k, structural savings = 1 - 2/(k+1)
-   - At k=5: savings = 1 - 2/6 = 66.7% (matches simulation perfectly)
-   - This is more defensible than stochastic API token ratios and should be the primary savings metric in the paper
-   - Report empirical 77-86% as exceeding the structural bound (due to reduced per-turn prompt complexity)
-
-5. **Paper framing decision ($0, 1 hr) — REQUIRED before submission**:
-   - If dynamic context experiment succeeds: frame as "Incremental and Dynamic Computation for LLM Programs"
-   - If dynamic context experiment is skipped: frame as "Incremental Computation for Sequential Context Processing in LLM Programs" with dynamic context as explicitly-scoped future work
-   - Do NOT use "Dynamic RLM" in the title without a dynamic context experiment
+4. **Paper draft ($0, 4-8 hrs) — HIGH value, parallel with experiments**:
+   - The data is sufficient for a workshop paper or short paper NOW
+   - Start writing. The structure is clear:
+     - Section 1: Introduction (dynamic metrics gap, incremental computation thesis)
+     - Section 2: IncrementalState architecture (entity cache, pair tracker, retraction, monotone merge)
+     - Section 3: Experiments (Tables 14-15, structural formula, dynamic context)
+     - Section 4: Analysis (retraction taxonomy, at-risk predictor, library-vs-template, stochasticity)
+     - Section 5: Related work (incremental view maintenance, RETE networks, streaming DB systems)
+     - Section 6: Limitations (single corpus, single model, monotone predicates only)
 
 ## Code Issues Found
 
-1. **Task 6 V4 Run 2: Oracle C failed with F1=0.0 (stochastic LLM failure, 0 entities found)**:
-   The paper uses C from the D experiment as a replacement. This is acceptable but reveals fragility in the oracle. Add `max_retries=3` to `run_condition_c_oracle()` with F1>0 as success criterion. This is a simple defensive change that prevents future oracle failures from wasting experiment budget.
+1. **`apply_edits()` Phase 3 lacks deduplication for edited x edited pairs** (`rlm/core/incremental.py`, lines 588-603): When two edited entities form a potential pair, it's checked twice (once per entity's sweep). This inflates `pair_checks` by up to C(E,2). Non-blocking (correctness preserved by `has_pair` guard), but inconsistent with `process_chunk()` which has `checked_in_updated_sweep` deduplication. Fix: 3 lines adding a `checked_in_edit_sweep` set.
 
-2. **Condition D token variance is extreme (246K vs 80K for identical F1)**:
-   `run_condition_d_full_recompute()` generates unrolled code that the LLM sometimes executes in 1 iteration and sometimes in 9. Report savings using the **minimum-token** D run as the conservative baseline (77.1% savings against efficient D is more defensible than 79.8% against inefficient D).
+2. **No temperature parameter in headline experiment scripts**: `eval/label_aware_v4_experiment.py` and `eval/multi_run_stability.py` use default temperature (1.0 for gpt-4o-mini). Only `eval/live_api_experiment.py` has temperature control. This should be documented in the paper ("all experiments use default temperature") and a temperature=0 ablation would strengthen the retraction stochasticity finding.
 
-3. **No execution-level test for `generate_unrolled_chunk_code()`**:
-   The 5 new tests check structural properties. Add one test that `exec()`s the generated code with a mock `_incremental` object and verifies correct pair output. This catches semantic bugs (not just syntactic ones) in the code generator.
+3. **`plot_per_turn_tokens.py` hardcodes data from a single run**: Lines 9-10 contain literal token values from Exp 49. If future runs produce different data, the figure is stale. Consider reading from `results/streaming/` JSON files instead. Low priority.
 
-4. **`PairTracker._retracted` unbounded growth**:
-   `clear_retracted()` exists but is never called. For OOLONG-Pairs scale this is fine. For production use, either auto-clear at end of `process_chunk()` or document that callers must manage this. Low priority for paper; medium priority if this code is released as a library.
+4. **Multi-run stability doesn't capture per-turn retraction counts**: `multi_run_stability.py` captures final F1 and total tokens but doesn't record per-turn retractions from `f1_progression`. The retraction stochasticity finding (2700 retractions at Turn 3 in Runs 1&2, 0 in Run 3) was reported from the research log but isn't in the structured result JSON. Adding `per_turn_retractions` to each run's result dict would make the finding reproducible from data alone.
 
 ## Acknowledged Limitations
 
-- Single corpus (OOLONG-Pairs, N=231) with one entity type (users). Cross-corpus generalization is out of scope.
-- Single model (gpt-4o-mini). Cross-model generalization requires future work.
-- Only monotone predicate tasks (1, 3, 6) show strong results. Non-monotone Task 11 shows F1=0.047 — the framework works but accuracy is poor. The paper should be explicit about this scope boundary.
-- The 25K context budget constrains absolute F1 to ≤0.34. A full-corpus experiment would test whether the incremental mechanism scales to larger absolute F1 values.
-- Token savings percentages are influenced by stochastic LLM iteration counts. The structural formula (66.7% at k=5) is more robust than empirical token ratios.
-- The "Dynamic RLM" thesis framing remains aspirational until a dynamic context experiment is run. The current evidence supports "Incremental Sequential Processing" only.
+- Single corpus (OOLONG-Pairs, N=231). Cross-corpus generalization is theoretically motivated but untested. State in paper.
+- Single model (gpt-4o-mini). Cross-model validation is the #1 remaining gap. If deferred, state explicitly as a limitation.
+- Only monotone-predicate tasks show strong results. Task 11 (non-monotone, "exactly N") shows F1=0.047. The paper's scope is monotone predicates — state this boundary clearly.
+- The retraction stochasticity finding is from n=3 runs. More runs would narrow the confidence interval on sigma_F1. n=5 would be ideal, but n=3 is acceptable for a first characterization.
+- The "Dynamic RLM" framing is now supported by Experiments 44-46, but the dynamic context experiments are narrow: 1 task, chunk-0-only edits, hand-crafted balanced edits. Real-world dynamic scenarios (streaming data, multi-source updates) are out of scope. Frame accurately.
+- The structural savings formula 1-2/(k+1) assumes uniform entity arrival across chunks. For highly skewed arrival patterns (front-loaded or back-loaded), the formula may not hold. This was demonstrated at N=100 (Exp 16) where savings collapsed due to update-rate effects.

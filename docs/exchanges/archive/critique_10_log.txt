@@ -1,18 +1,13 @@
 The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
 
-## Key Findings
+**Overall**: The research is strong and approaching submission quality. F1=0.979±0.019 with 71-91% token savings across 3 tasks, P=1.0 invariant, and honest multi-run reporting.
 
-**What's Strong:**
-- The Condition D fair comparison (77-86% token savings at 100% quality across 3 tasks) is the paper's strongest result and passes the 3rd-party clarity test cleanly
-- Multi-run stability is publication-grade (σ=0.004 at k=5, σ=0.000 at k=3)
-- The core `incremental.py` code is well-implemented with no new bugs found
-- At-risk fraction predictor is validated across 3 tasks
+**Scores**: Novelty 8/10 (+0.5), Technical Soundness 8.5/10 (+0), Benchmark Performance 8.5/10 (+2.0 — biggest jump from resolving the F1=0.32 problem), Scalability 6.5/10 (+0.5), Research Maturity 8/10 (+0.5).
 
-**The One Big Thing:**
-- **Run the dynamic context proof-of-concept** — deferred for 3 iterations, but all higher-priority blockers are now resolved. The retraction mechanism (the most novel architectural component) has never been tested with actually-changing data in a live API run. A $1-2 experiment would transform the retraction taxonomy from "simulation finding" to "empirically demonstrated."
+**The One Big Thing**: **Run the cross-model validation** ($0.50, 30 min). This has been deferred 5+ iterations. All higher-priority items are resolved. A single gpt-4o run would address the most obvious reviewer objection ("is P=1.0 architecture-level or model-specific?").
 
-**Other Key Issues:**
-1. Token savings reporting should use the **structural formula** (deterministic: 66.7% at k=5) as primary metric, since D's token counts vary 3× across runs due to stochastic iteration counts
-2. The "Dynamic RLM" framing has zero supporting live experiments — paper must either run the dynamic context experiment or reframe as "Incremental Sequential Processing"
-3. A full-corpus (96K) experiment would remove the "artificial 25K budget" reviewer concern
-4. Oracle C has stochastic failures (Task 6 Run 2: F1=0.0) — needs retry logic
+**Key findings**:
+- All experiments pass the 3rd-party clarity test — no blocking issues
+- Retraction stochasticity is an underemphasized finding that could itself be a paper contribution
+- One minor code issue: `apply_edits()` Phase 3 lacks deduplication for edited×edited pairs (3-line fix)
+- No temperature control in headline experiments — should be documented and ablated
