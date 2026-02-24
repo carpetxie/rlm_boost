@@ -4,6 +4,24 @@
 
 ---
 
+## NEXT CYCLE PRIORITIES (Iterations 18+)
+
+The core contribution is validated. The next cycle should focus on **strengthening the claims** and **removing remaining critiques**:
+
+### 1. Full-Corpus Run (HIGH — removes the "artificial budget" critique)
+All experiments use only 25K of the 96K-char corpus. F1 is capped at ~0.34 because 80% of entities are never seen. Run Condition A (incremental) and Condition D (full-recompute) on the FULL 96K corpus (k=5, ~19K chars/chunk). Expected: much higher absolute F1, same relative savings. Condition C Full already achieves F1=1.0 on 96K chars. Cost: ~$0.50-1.00.
+
+### 2. Cross-Model Validation (MEDIUM — addresses Scalability 6/10)
+Everything uses gpt-4o-mini. Run the headline experiment (Task 1, k=5, V4) with ONE different model (gpt-4o, claude-3.5-sonnet, or gemini). Even a single run showing similar patterns (P=1.0, similar A/C ratio, similar savings) would boost the Scalability score. Cost: ~$0.50.
+
+### 3. Non-Monotone Task Investigation (LOW-MEDIUM — addresses scope boundary)
+Task 11 (non-monotone, "exactly N") currently shows F1=0.047. The framework works but accuracy is poor. Investigate whether a task-specific check_pair for "exactly N" conditions can improve this, or document it as a principled scope boundary.
+
+### 4. Paper Writing / Framing (when experiments are done)
+With the dynamic context experiment complete, the paper can use "Incremental and Dynamic Computation for LLM Programs" framing. Finalize paper structure, abstract, and claims.
+
+---
+
 ## ✅ CRITICAL GAP — FULLY RESOLVED (Iteration 16)
 
 **The fair Condition D (full-recompute) vs Incremental comparison is complete across 3 tasks.**
