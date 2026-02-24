@@ -515,6 +515,85 @@ class IncrementalState:
             "chunks_processed": len(self.chunk_log),
         }
 
+    def apply_edits(
+        self,
+        edits: dict[str, dict[str, Any]],
+        pair_checker: Any = None,
+        edit_chunk_index: int = -1,
+    ) -> dict[str, Any]:
+        """Apply entity attribute edits and retract/re-evaluate affected pairs.
+
+        For dynamic context scenarios where entity attributes change between turns
+        (document edits, streaming corrections, etc.).
+
+        This is the first-class API for non-monotonic context updates. It handles:
+        1. Updating entity attributes in the cache
+        2. Retracting all pairs involving edited entities
+        3. Re-evaluating retracted pairs with updated attributes
+        4. Discovering new pairs created by the attribute change
+
+        Args:
+            edits: {entity_id: new_attributes} for entities to modify
+            pair_checker: Optional callable(attrs1, attrs2) -> bool
+            edit_chunk_index: Chunk index to record for the edit (default -1)
+
+        Returns:
+            Stats dict with: entities_edited, total_retracted, pairs_readded,
+            new_pairs_from_edits, pairs_before, pairs_after, precision_preserved.
+        """
+        pairs_before = len(self.pair_tracker)
+        total_retracted = 0
+        pairs_readded = 0
+        new_pairs_from_edits = 0
+
+        for eid, new_attrs in edits.items():
+            # Update entity in cache
+            self.entity_cache.add(eid, new_attrs, chunk_index=edit_chunk_index)
+
+            # Retract all pairs involving this entity
+            retracted = self.pair_tracker.retract_entity(eid)
+            total_retracted += len(retracted)
+            self._total_retractions += len(retracted)
+
+            if pair_checker:
+                updated_attrs = self.entity_cache.get(eid)
+
+                # Re-evaluate retracted pairs
+                for p in retracted:
+                    partner_id = p[1] if p[0] == eid else p[0]
+                    partner_attrs = self.entity_cache.get(partner_id)
+                    if partner_attrs and pair_checker(updated_attrs, partner_attrs):
+                        self.pair_tracker.add_pair(eid, partner_id)
+                        pairs_readded += 1
+
+                # Check for NEW pairs with all existing entities
+                for other_id in self.entity_cache.get_ids():
+                    if other_id == eid:
+                        continue
+                    # Skip if pair already exists (re-added above)
+                    canonical = (min(eid, other_id), max(eid, other_id))
+                    if canonical in self.pair_tracker._pairs:
+                        continue
+                    other_attrs = self.entity_cache.get(other_id)
+                    if other_attrs and pair_checker(updated_attrs, other_attrs):
+                        self.pair_tracker.add_pair(eid, other_id)
+                        new_pairs_from_edits += 1
+
+        pairs_after = len(self.pair_tracker)
+        permanent = total_retracted - pairs_readded
+        self._permanent_retractions += max(0, permanent)
+        self._noop_retractions += pairs_readded
+
+        return {
+            "entities_edited": len(edits),
+            "total_retracted": total_retracted,
+            "pairs_readded": pairs_readded,
+            "new_pairs_from_edits": new_pairs_from_edits,
+            "permanent_retractions": max(0, permanent),
+            "pairs_before": pairs_before,
+            "pairs_after": pairs_after,
+        }
+
     def reset(self) -> None:
         """Reset all state to allow reprocessing from scratch.
 
