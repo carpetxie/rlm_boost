@@ -184,6 +184,11 @@ def compute_gold_pairs_with_edits(
     """Compute gold pairs from the labeled context with edits applied.
 
     This is the UPDATED ground truth after applying entity edits.
+
+    # TODO: Uses simplified qualifying check (e["qualifying"]) instead of
+    # _check_pair_condition(). Correct for symmetric tasks (1, 3, 6) but would
+    # produce wrong gold pairs for asymmetric tasks. Generalize if extending
+    # to asymmetric tasks.
     """
     # Parse all entities from the full context window
     all_entities = find_entities_in_chunk(labeled_context_window, qualifying_labels)
