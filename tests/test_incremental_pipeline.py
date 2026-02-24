@@ -597,6 +597,135 @@ print(f"Pairs: {sorted(_incremental.pair_tracker.get_pairs())}")
             repl.cleanup()
 
 
+# =============================================================================
+# apply_edits() Tests
+# =============================================================================
+
+
+class TestApplyEdits:
+    """Tests for IncrementalState.apply_edits() — the dynamic context API."""
+
+    def _make_qualifying_checker(self):
+        """Pair checker: both entities must be qualifying."""
+        def checker(a, b):
+            return a.get("qualifying", False) and b.get("qualifying", False)
+        return checker
+
+    def test_downgrade_removes_pairs(self):
+        """Downgrading an entity from qualifying to non-qualifying removes its pairs."""
+        state = IncrementalState()
+        checker = self._make_qualifying_checker()
+
+        # Add 3 qualifying entities → C(3,2) = 3 pairs
+        state.process_chunk(0, {
+            "u1": {"qualifying": True},
+            "u2": {"qualifying": True},
+            "u3": {"qualifying": True},
+        }, pair_checker=checker)
+        assert len(state.pair_tracker) == 3
+
+        # Downgrade u1 → should lose 2 pairs (u1-u2, u1-u3)
+        stats = state.apply_edits(
+            {"u1": {"qualifying": False}},
+            pair_checker=checker,
+        )
+        assert stats["entities_edited"] == 1
+        assert stats["total_retracted"] == 2  # u1-u2, u1-u3
+        assert stats["pairs_readded"] == 0  # u1 no longer qualifying
+        assert stats["pairs_after"] == 1  # only u2-u3 remains
+        assert len(state.pair_tracker) == 1
+
+    def test_upgrade_adds_pairs(self):
+        """Upgrading an entity to qualifying creates new pairs."""
+        state = IncrementalState()
+        checker = self._make_qualifying_checker()
+
+        # u1, u2 qualifying; u3 not
+        state.process_chunk(0, {
+            "u1": {"qualifying": True},
+            "u2": {"qualifying": True},
+            "u3": {"qualifying": False},
+        }, pair_checker=checker)
+        assert len(state.pair_tracker) == 1  # only u1-u2
+
+        # Upgrade u3 → should gain pairs with u1 and u2
+        stats = state.apply_edits(
+            {"u3": {"qualifying": True}},
+            pair_checker=checker,
+        )
+        assert stats["entities_edited"] == 1
+        assert stats["total_retracted"] == 0  # u3 had no pairs
+        assert stats["new_pairs_from_edits"] == 2  # u3-u1, u3-u2
+        assert stats["pairs_after"] == 3  # u1-u2, u1-u3, u2-u3
+
+    def test_precision_maintained(self):
+        """After edits, all remaining pairs should be valid."""
+        state = IncrementalState()
+        checker = self._make_qualifying_checker()
+
+        state.process_chunk(0, {
+            "u1": {"qualifying": True},
+            "u2": {"qualifying": True},
+            "u3": {"qualifying": True},
+            "u4": {"qualifying": False},
+        }, pair_checker=checker)
+        assert len(state.pair_tracker) == 3
+
+        # Mixed edit: downgrade u1, upgrade u4
+        state.apply_edits({
+            "u1": {"qualifying": False},
+            "u4": {"qualifying": True},
+        }, pair_checker=checker)
+
+        # Verify all remaining pairs are valid
+        for p in state.pair_tracker.get_pairs():
+            a1 = state.entity_cache.get(p[0])
+            a2 = state.entity_cache.get(p[1])
+            assert checker(a1, a2), f"Invalid pair {p}: {a1}, {a2}"
+
+        # u2-u3, u2-u4, u3-u4 = 3 pairs (u1 lost, u4 gained)
+        assert len(state.pair_tracker) == 3
+
+    def test_telemetry_tracks_edit_retractions(self):
+        """apply_edits() updates _total_retractions counter."""
+        state = IncrementalState()
+        checker = self._make_qualifying_checker()
+
+        state.process_chunk(0, {
+            "u1": {"qualifying": True},
+            "u2": {"qualifying": True},
+        }, pair_checker=checker)
+        assert state.get_stats()["total_retractions"] == 0
+
+        state.apply_edits(
+            {"u1": {"qualifying": False}},
+            pair_checker=checker,
+        )
+        stats = state.get_stats()
+        assert stats["total_retractions"] == 1  # retracted u1-u2
+        assert stats["permanent_retractions"] == 1  # not re-added
+
+    def test_noop_edit_preserves_pairs(self):
+        """Editing an entity without changing qualifying status keeps pairs intact."""
+        state = IncrementalState()
+        checker = self._make_qualifying_checker()
+
+        state.process_chunk(0, {
+            "u1": {"qualifying": True, "name": "Alice"},
+            "u2": {"qualifying": True, "name": "Bob"},
+        }, pair_checker=checker)
+        assert len(state.pair_tracker) == 1
+
+        # Edit name but keep qualifying=True
+        stats = state.apply_edits(
+            {"u1": {"qualifying": True, "name": "Alicia"}},
+            pair_checker=checker,
+        )
+        assert stats["total_retracted"] == 1  # still retracted for safety
+        assert stats["pairs_readded"] == 1  # re-added after re-check
+        assert stats["pairs_after"] == 1  # pair preserved
+
+
 class TestProcessChunkDeduplication:
     """Test the idempotency guard added in Iteration 8 (Failure Mode C fix)."""
 
