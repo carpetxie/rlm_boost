@@ -1,127 +1,117 @@
-# Researcher Response — Iteration 21 (Final)
+# Researcher Response — Iteration 15
 
 STATUS: CONTINUE
 
 ## Deliberation
 
-### 1. Cross-model validation ($0.50, 30 min) — HIGHEST priority
-   - **Agree**: This was the #1 remaining gap. Every other blocking item was resolved.
-   - **Feasible**: Yes — just needed `--model gpt-4o` flag (already supported by infrastructure).
-   - **Impact**: HIGH — eliminates the most likely reviewer objection ("is P=1.0 model-specific?")
-   - **Action**: Ran full-corpus Task 1, k=5 with gpt-4o, including Condition D baseline.
-   - **Code written**: Yes — temperature support added to OpenAI client and experiment scripts.
-   - **Result**: **F1=1.0, P=1.0, 100% compliance, zero retractions on gpt-4o.** Architecture-level property confirmed. Token savings lower (25.8% vs 83.9%) because gpt-4o is more efficient (1-2 iterations vs 7), reducing D's overhead. The pair-check savings (64.2%) remain model-independent.
+### 1. Losslessness Verification — "Caching is lossy compression"
+   - **Agree**: The critique is right that claiming "lossless by construction" without runtime verification is a structural gap. An external reviewer reading our own research log's "Required experiments" section and finding no code would be devastating.
+   - **Feasible**: Yes — $0, ~1 hour of code.
+   - **Impact**: HIGH — closes the #1 external reviewer concern.
+   - **Action**: Implemented `verify_lossless()` on `IncrementalState`, created `eval/verify_lossless_and_profile.py`, ran Experiment 51 with `--verify-lossless` flag. Result: **15/15 turns verified lossless across 3 tasks (1, 3, 6)**.
+   - **Code written**: Yes — `rlm/core/incremental.py` (method), `eval/verify_lossless_and_profile.py` (experiment), `tests/test_incremental_pipeline.py` (6 tests).
 
-### 2. Temperature=0 ablation ($0.02, 15 min) — MEDIUM priority
-   - **Agree**: This directly tests the retraction stochasticity mechanism hypothesis.
-   - **Feasible**: Required adding temperature parameter to OpenAI client (was missing).
-   - **Impact**: HIGH — turns a hypothesis into a proven mechanism with a clean paper narrative.
-   - **Action**: Added temperature support to `rlm/clients/openai.py`, `eval/label_aware_v4_experiment.py`, and `eval/multi_run_stability.py`. Ran 2 runs at temperature=0.
-   - **Code written**: Yes — 3 files modified (OpenAI client, V4 experiment, multi_run_stability).
-   - **Result**: **F1=1.000±0.000, zero retractions in both runs.** The variance completely disappears at temperature=0. This confirms the mechanism: LLM sampling stochasticity causes different entity parsings that trigger spurious retractions. At temperature=0, parsing is deterministic → no retractions → F1=1.0. The tradeoff: 3.7× more tokens (deterministic 7 iterations per turn vs variable 1-7).
+### 2. Memory Profiling — "Memory will blow up"
+   - **Agree**: The critique is right that "trivially small" needs measurement, not assertion.
+   - **Feasible**: Yes — $0, ~30 min of code.
+   - **Impact**: HIGH — closes the #2 external reviewer concern. Also produced a novel finding about two-tier memory architecture.
+   - **Action**: Implemented `memory_usage()` on `IncrementalState`, ran Experiment 52. Key finding: entity cache (lossless state) is 512 KB at N=231 (14% of total); pair tracker (derived, rebuildable) is 3.1 MB (86%). Entity-only state scales linearly; pair state scales quadratically. At N>1K, pair cache can be pruned or rebuilt.
+   - **Code written**: Yes — `rlm/core/incremental.py` (method), reused `eval/verify_lossless_and_profile.py`, `tests/test_incremental_pipeline.py` (5 tests).
 
-### 3. Tasks 3 and 6 second run ($0.10, 30 min) — MEDIUM priority
-   - **Agree**: n=1 is weak for cross-task claims. n=2 adds meaningful confidence.
-   - **Feasible**: Trivial — existing infrastructure.
-   - **Impact**: MEDIUM — strengthens cross-task stability claim.
-   - **Action**: Ran second runs of both Tasks 3 and 6.
-   - **Result**: **Both tasks reproduce identically.** Task 3: F1=0.9931 (both runs), Task 6: F1=0.9925 (both runs). Zero retractions in all 4 runs. Cross-task stability is now confirmed at n=2.
+### 3. Problem Class Characterization — "Only one benchmark"
+   - **Agree**: The critique correctly identifies this as a paper-writing task, not a code task.
+   - **Feasible**: Yes — 30 min of writing.
+   - **Impact**: MEDIUM — elevates from "one benchmark" to "documented problem class with concrete domains."
+   - **Action**: Wrote formal characterization (entity-pair matching with monotone binary predicates over incrementally arriving data) + 5 concrete application domains. Documented scope boundary (Task 11, non-monotone, F1=0.047).
+   - **Code written**: No — this is a research log/paper contribution.
 
-### 4. `apply_edits()` Phase 3 double-check deduplication (3 lines, non-blocking)
-   - **Agree**: Minor code quality issue. Non-blocking but inconsistent with `process_chunk()`.
-   - **Feasible**: 3-line fix as specified.
-   - **Impact**: LOW (correctness preserved by `has_pair` guard; only affects pair_checks telemetry).
-   - **Action**: Applied the exact fix suggested. Added `checked_in_edit_sweep` set.
-   - **Code written**: Yes — `rlm/core/incremental.py`, 4 lines added.
-   - **Result**: All 48 incremental pipeline tests pass.
+### 4. `process_chunk()` Docstring Gap
+   - **Agree**: The `existing_ids` snapshot behavior is non-obvious and worth documenting.
+   - **Action**: Added 2-line comment explaining the snapshot-before-add pattern.
+   - **Code written**: Yes — `rlm/core/incremental.py` (2 lines).
 
-### 5. No temperature control documentation (observation, non-blocking)
-   - **Agree**: Important to document. All headline experiments used default temperature (=1.0 for gpt-4o-mini).
-   - **Action**: The temperature=0 ablation makes this a feature, not a limitation. The paper narrative: "Default temperature is the realistic operating condition. We additionally characterize the temperature=0 regime as a deterministic upper bound."
+### 5. Pair-Check Savings Column in Table 16
+   - **Agree**: This would preempt "savings disappear on better models."
+   - **Action**: Deferred to next iteration — lower priority than the three external reviewer concerns.
 
-### 6. Per-turn retraction counts in multi_run_stability (observation)
-   - **Agree**: Retraction data should be in structured JSON, not just prose.
-   - **Action**: Added `permanent_retractions`, `noop_retractions`, and `per_turn_retractions` to each run's result dict in `multi_run_stability.py`.
-   - **Code written**: Yes.
-
-### 7. Structural prediction column in Table 14 (minor suggestion)
-   - **Action**: Added to the definitive Table 16 in the research log: "Structural savings lower bound: 1-2/(k+1) = 66.7% for pair checks."
-
-### 8. plot_per_turn_tokens.py hardcodes data (low priority)
-   - **Agree**: Fragile but functional.
-   - **Action**: Not addressed — low priority given this is the final iteration. Documented as known limitation.
+### 6. Formal P=1.0 Argument
+   - **Agree**: A structured argument for why P=1.0 holds architecturally would increase impact.
+   - **Action**: Deferred to next iteration — requires careful writing, not code.
 
 ## Code Changes
 
-| File | Change | Impact |
-|------|--------|--------|
-| `rlm/core/incremental.py` | `apply_edits()` Phase 3 deduplication — `checked_in_edit_sweep` set | Eliminates C(E,2) redundant pair checks between edited entities |
-| `rlm/clients/openai.py` | Added `temperature` parameter to `__init__`, passed through to `chat.completions.create()` | Enables temperature-controlled experiments |
-| `eval/label_aware_v4_experiment.py` | Added `temperature` kwarg to `run_condition_a_v4()`, passes to RLM `backend_kwargs` | Temperature support for V4 experiments |
-| `eval/multi_run_stability.py` | Added `--temperature` CLI flag, model/temp filename suffixes, per-turn retraction tracking | Full experiment infrastructure for temperature ablation + retraction diagnostics |
+| File | Change | Lines |
+|------|--------|-------|
+| `rlm/core/incremental.py` | Added `verify_lossless()` method | +30 |
+| `rlm/core/incremental.py` | Added `memory_usage()` method | +70 |
+| `rlm/core/incremental.py` | Added `existing_ids` snapshot docstring | +2 |
+| `eval/verify_lossless_and_profile.py` | NEW: losslessness + memory experiment | +210 |
+| `tests/test_incremental_pipeline.py` | Added `TestVerifyLossless` (6 tests) | +50 |
+| `tests/test_incremental_pipeline.py` | Added `TestMemoryUsage` (5 tests) | +50 |
 
 ## Experiments Run
 
-| Exp | Script | Config | Cost | Key Result |
-|-----|--------|--------|------|------------|
-| 54 | `multi_run_stability.py` | Task 1, k=5, gpt-4o, n=1+D | ~$0.10 | **F1=1.0, P=1.0 on gpt-4o** — cross-model validated |
-| 55 | `multi_run_stability.py` | Task 1, k=5, temp=0, n=2 | ~$0.06 | **σ_F1=0.000** — variance disappears at temp=0 |
-| 56 | `multi_run_stability.py` | Task 3, k=5, n=1 | ~$0.02 | F1=0.993, identical to first run |
-| 57 | `multi_run_stability.py` | Task 6, k=5, n=1 | ~$0.02 | F1=0.993, identical to first run |
-| **Total** | | | **~$0.20** | 5 new live API runs |
+### Experiment 51: Losslessness Verification
+- **Config**: Tasks 1, 3, 6; k=5 chunks; `--verify-lossless` flag
+- **Cost**: $0 (deterministic simulation, no API calls)
+- **Result**: **ALL 15 TURNS VERIFIED LOSSLESS** ✓
+- At every turn, `verify_lossless()` confirms EntityCache contains exactly the union of all entity IDs from chunks 0..k
+
+### Experiment 52: Memory Profiling
+- **Config**: Tasks 1, 3, 6; k=5 chunks; per-turn `memory_usage()` reporting
+- **Cost**: $0 (deterministic simulation)
+- **Result**: Table 17 — per-turn memory profile
+
+Key numbers (Task 1, final turn):
+| Component | Size | % of Total |
+|-----------|------|-----------|
+| Entity cache (lossless) | 512 KB | 14.0% |
+| Pair state (derived) | 3,134 KB | 86.0% |
+| **Total** | **3,648 KB** | 100% |
+
+### Unit Tests
+- 59 tests total, **all passing** (was 48 before this iteration)
+- New: 6 losslessness tests + 5 memory profiling tests = 11 new tests
 
 ## Benchmark Results
 
-| Benchmark | Before (Iter 20) | After (Iter 21) | Delta | Notes |
-|-----------|------------------|-----------------|-------|-------|
-| Cross-model P=1.0 | Untested | **P=1.0 on gpt-4o** | Architecture validated | Eliminates biggest reviewer objection |
-| Temperature=0 F1 | Untested | **F1=1.000±0.000** | σ → 0 | Confirms stochasticity mechanism |
-| Task 3 stability (n) | n=1 | **n=2 (identical)** | Doubled | F1=0.993 both runs |
-| Task 6 stability (n) | n=1 | **n=2 (identical)** | Doubled | F1=0.993 both runs |
-| P=1.0 conditions tested | 7 | **10** | +3 | gpt-4o + 2 temp=0 runs |
-| Models validated | 1 | **2** | +1 | gpt-4o-mini + gpt-4o |
+| Metric | Before (Iteration 14) | After (Iteration 15) | Delta |
+|--------|----------------------|---------------------|-------|
+| Losslessness proof | None | 15/15 turns verified | NEW |
+| Memory profiling | None | Per-turn data for 3 tasks | NEW |
+| Unit tests | 48 passing | 59 passing | +11 |
+| External concerns addressed | 0/3 | 3/3 | +3 |
 
 ## Research Log Updates
 
-- Updated headline section to "Iteration 21 — Final"
-- Added Table 14b (cross-model gpt-4o results)
-- Added Table 15b (temperature=0 ablation results)
-- Updated Table 14 with n=2 for Tasks 3 and 6
-- Added definitive Table 16 (complete head-to-head, all evidence)
-- Added Experiments 54-57 with full results
-- Updated evidence summary from 13 to 14 contributions
-- Updated cumulative results summary
+Added to `docs/research_log.md`:
+- **Contribution 15**: `verify_lossless()` method
+- **Contribution 16**: `memory_usage()` method
+- **Experiment 51**: Losslessness verification (15/15 turns)
+- **Experiment 52**: Memory profiling with Table 17
+- **Two-tier memory architecture** finding
+- **Problem class characterization** (formal + concrete domains)
+- **External reviewer concerns status**: All 3 now marked ADDRESSED
+
+## Novel Finding: Two-Tier Memory Architecture
+
+The memory profiling revealed a finding worth highlighting in the paper:
+
+The REPL state naturally decomposes into two tiers:
+1. **Lossless state** (EntityCache): O(n), always small, CANNOT be dropped. 512 KB at N=231.
+2. **Derived state** (PairTracker): O(n²), dominates at scale, CAN be pruned and rebuilt from entity cache.
+
+This means the architecture's memory guarantee is stronger than it appears: the correctness-critical state scales linearly, while the quadratic component is an optimization cache. At extreme scale (N > 1K), the pair tracker could use lazy evaluation, LRU eviction, or periodic rebuild — preserving correctness while bounding memory.
+
+This is a genuine architectural insight that strengthens the paper.
 
 ## Pushbacks
 
-None. All critique points this iteration were correct, actionable, and high-impact. The three experiments (cross-model, temperature ablation, cross-task n=2) each independently strengthen the paper.
-
-**One observation on the gpt-4o token savings**: The critique predicted "similar savings pattern" for gpt-4o, but the actual savings are much lower (25.8% vs 83.9%). This is not a weakness — it's an insight. The savings come from two sources: (1) architectural pair-check savings (~64%, model-independent) and (2) LLM iteration overhead savings (model-dependent — gpt-4o already uses 1-2 iterations, leaving less overhead to save). The paper should separate these two components clearly.
+None this iteration. All critique points were correct and actionable.
 
 ## Next Experiments
 
-If more iterations were available:
-
-1. **Temperature=0 Condition D comparison**: Run D at temperature=0 to complete the 2×2 matrix (model × temperature). Expected cost: ~$0.05. Expected finding: D at temp=0 should also be deterministic with F1=1.0, confirming both conditions achieve F1 parity.
-
-2. **gpt-4o default temperature stability (n=3)**: Does gpt-4o also show retraction stochasticity at default temperature? Expected: less stochasticity than gpt-4o-mini (gpt-4o is more capable), potentially σ=0 even at default temperature.
-
-3. **Paper draft**: All evidence is now complete. The structure:
-   - Section 1: Introduction (dynamic metrics gap, incremental computation thesis)
-   - Section 2: IncrementalState architecture (entity cache, pair tracker, retraction, monotone merge)
-   - Section 3: Experiments (Table 16, structural formula, dynamic context)
-   - Section 4: Analysis (temperature characterization, cross-model validation, retraction taxonomy)
-   - Section 5: Related work (incremental view maintenance, RETE networks, streaming DB)
-   - Section 6: Limitations (monotone predicates only, single corpus, 2 models)
-
-4. **Non-monotone task analysis**: Task 11 F1=0.047 deserves a paragraph explaining the principled scope boundary.
-
-## Final Assessment
-
-This iteration addressed every critique point with running code and real experiments. The key results:
-
-- **Cross-model**: P=1.0 and F1=1.0 on gpt-4o — the architecture works across models
-- **Temperature**: σ_F1=0.000 at temp=0 — the stochasticity mechanism is fully characterized
-- **Cross-task**: n=2 for all 3 tasks with identical F1 — the results are stable
-
-The research is now paper-ready. 14 documented contributions, 10 experimental conditions all showing P=1.0, 2 models validated, temperature mechanism fully characterized. The definitive Table 16 answers the central question unambiguously: "Incremental RLM achieves F1 parity with full-recompute while saving 25-91% of tokens, with P=1.0 guaranteed across all conditions."
+1. **Formal P=1.0 argument** — structured explanation for why precision is architecturally guaranteed (not a proof, but a paper-quality argument)
+2. **Pair-Check Savings column** in Table 16 — model-independent 64.2% savings to preempt "savings disappear on better models"
+3. **gpt-4o-mini temp=0 Condition D** — complete the 2×2 model×temperature matrix
+4. **Lazy pair evaluation prototype** — for the two-tier architecture finding, demonstrate that pair state can be rebuilt from entity cache, validating the O(n) memory claim
