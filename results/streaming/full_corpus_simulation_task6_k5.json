@@ -1,0 +1,122 @@
+{
+  "experiment": "full_corpus_simulation",
+  "task_idx": 6,
+  "num_chunks": 5,
+  "total_chars": 96689,
+  "max_chunk_chars": 19337,
+  "gold_pairs": 8911,
+  "total_entities": 231,
+  "qualifying_entities": 134,
+  "condition_a": {
+    "final_f1": 0.9925,
+    "final_precision": 1.0,
+    "final_recall": 0.9851,
+    "final_pairs": 8778,
+    "total_pair_checks": 30744,
+    "total_retractions": 0,
+    "progression": [
+      {
+        "chunk": 0,
+        "pairs": 1081,
+        "f1": 0.2164,
+        "precision": 1.0,
+        "recall": 0.1213,
+        "pair_checks": 4753,
+        "new_entities": 98,
+        "updated_entities": 0
+      },
+      {
+        "chunk": 1,
+        "pairs": 3081,
+        "f1": 0.5138,
+        "precision": 1.0,
+        "recall": 0.3458,
+        "pair_checks": 6667,
+        "new_entities": 45,
+        "updated_entities": 14
+      },
+      {
+        "chunk": 2,
+        "pairs": 5253,
+        "f1": 0.7417,
+        "precision": 1.0,
+        "recall": 0.5895,
+        "pair_checks": 5643,
+        "new_entities": 25,
+        "updated_entities": 13
+      },
+      {
+        "chunk": 3,
+        "pairs": 7140,
+        "f1": 0.8897,
+        "precision": 1.0,
+        "recall": 0.8013,
+        "pair_checks": 5874,
+        "new_entities": 27,
+        "updated_entities": 6
+      },
+      {
+        "chunk": 4,
+        "pairs": 8778,
+        "f1": 0.9925,
+        "precision": 1.0,
+        "recall": 0.9851,
+        "pair_checks": 7807,
+        "new_entities": 35,
+        "updated_entities": 2
+      }
+    ]
+  },
+  "condition_d": {
+    "final_f1": 0.9925,
+    "final_precision": 1.0,
+    "final_recall": 0.9851,
+    "final_pairs": 8778,
+    "total_pair_checks": 86917,
+    "progression": [
+      {
+        "turn": 0,
+        "pairs": 1081,
+        "f1": 0.2164,
+        "precision": 1.0,
+        "recall": 0.1213,
+        "pair_checks": 4753
+      },
+      {
+        "turn": 1,
+        "pairs": 3081,
+        "f1": 0.5138,
+        "precision": 1.0,
+        "recall": 0.3458,
+        "pair_checks": 11420
+      },
+      {
+        "turn": 2,
+        "pairs": 5253,
+        "f1": 0.7417,
+        "precision": 1.0,
+        "recall": 0.5895,
+        "pair_checks": 17063
+      },
+      {
+        "turn": 3,
+        "pairs": 7140,
+        "f1": 0.8897,
+        "precision": 1.0,
+        "recall": 0.8013,
+        "pair_checks": 22937
+      },
+      {
+        "turn": 4,
+        "pairs": 8778,
+        "f1": 0.9925,
+        "precision": 1.0,
+        "recall": 0.9851,
+        "pair_checks": 30744
+      }
+    ]
+  },
+  "pair_check_savings": 0.6462832357306396,
+  "structural_prediction": 0.6666666666666667,
+  "f1_match": true
+}
