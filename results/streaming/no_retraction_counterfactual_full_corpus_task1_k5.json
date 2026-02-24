@@ -1,0 +1,77 @@
+[
+  {
+    "num_edits": 5,
+    "num_downgrade": 2,
+    "num_upgrade": 3,
+    "gold_original": 8001,
+    "gold_post_edit": 7875,
+    "with_retraction": {
+      "pairs_before": 8001,
+      "pairs_after": 7875,
+      "retractions": 498,
+      "invalid_pairs": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "without_retraction": {
+      "pairs_before": 8001,
+      "pairs_after": 8001,
+      "invalid_pairs": 251,
+      "missing_new_pairs": 127,
+      "precision": 0.9686289213848269,
+      "recall": 0.9841,
+      "f1": 0.9763
+    }
+  },
+  {
+    "num_edits": 10,
+    "num_downgrade": 5,
+    "num_upgrade": 5,
+    "gold_original": 8001,
+    "gold_post_edit": 7626,
+    "with_retraction": {
+      "pairs_before": 8001,
+      "pairs_after": 7626,
+      "retractions": 980,
+      "invalid_pairs": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "without_retraction": {
+      "pairs_before": 8001,
+      "pairs_after": 8001,
+      "invalid_pairs": 620,
+      "missing_new_pairs": 252,
+      "precision": 0.9225096862892138,
+      "recall": 0.9679,
+      "f1": 0.9446
+    }
+  },
+  {
+    "num_edits": 20,
+    "num_downgrade": 10,
+    "num_upgrade": 10,
+    "gold_original": 8001,
+    "gold_post_edit": 7260,
+    "with_retraction": {
+      "pairs_before": 8001,
+      "pairs_after": 7260,
+      "retractions": 1896,
+      "invalid_pairs": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "without_retraction": {
+      "pairs_before": 8001,
+      "pairs_after": 8001,
+      "invalid_pairs": 1215,
+      "missing_new_pairs": 504,
+      "precision": 0.8481439820022497,
+      "recall": 0.9347,
+      "f1": 0.8893
+    }
+  }
+]
