@@ -476,6 +476,19 @@ class IncrementalState:
                         self.pair_tracker.add_pair(updated_id, other_id)
                         new_pairs += 1
 
+        # Warn if updated-entity sweep dominates (quality-of-life heuristic).
+        # When len(updated_ids) >> len(new_ids), the O(u × n) sweep dominates
+        # cost. Consider reducing chunk granularity or switching to full recompute.
+        if updated_ids and new_ids and len(updated_ids) > len(new_ids) * 2:
+            import warnings
+
+            warnings.warn(
+                f"High update ratio: {len(updated_ids)} updates vs {len(new_ids)} new entities "
+                f"at chunk {chunk_index}. The O(u×n) updated-entity sweep dominates cost. "
+                f"Consider reducing chunk granularity or switching to full recompute.",
+                stacklevel=2,
+            )
+
         self._total_new_entities += len(new_ids)
         self._total_pair_checks += pair_checks
 
@@ -665,56 +678,74 @@ class IncrementalState:
         """Report memory usage in bytes for each component.
 
         Uses sys.getsizeof for shallow container sizes plus deep traversal
-        of entity attributes and pair tuples. This gives an accurate lower
-        bound on the Python-level memory footprint.
+        of entity attributes and pair tuples. Tracks already-counted object
+        IDs to avoid double-counting shared references (e.g., entity ID
+        strings stored in _entities, _by_chunk, and _entity_pairs are the
+        SAME Python objects due to interning).
+
+        This gives an accurate lower bound on the Python-level memory footprint.
 
         Useful for addressing the "memory will blow up" concern: shows that
         REPL state memory is negligible compared to LLM context window sizes.
         """
         import sys
 
+        # Track already-counted objects to avoid double-counting shared references.
+        # Python string interning means the same entity ID string stored in
+        # _entities, _by_chunk, and _entity_pairs is the SAME object in memory.
+        _counted_ids: set[int] = set()
+
+        def _sizeof_unique(obj: Any) -> int:
+            """Return sys.getsizeof(obj) only if not already counted."""
+            obj_id = id(obj)
+            if obj_id in _counted_ids:
+                return 0
+            _counted_ids.add(obj_id)
+            return sys.getsizeof(obj)
+
         # Entity cache: dict of dicts with nested attributes
-        entity_bytes = sys.getsizeof(self.entity_cache._entities)
+        entity_bytes = _sizeof_unique(self.entity_cache._entities)
         for eid, entry in self.entity_cache._entities.items():
-            entity_bytes += sys.getsizeof(eid)  # key string
-            entity_bytes += sys.getsizeof(entry)  # entry dict
+            entity_bytes += _sizeof_unique(eid)  # key string
+            entity_bytes += _sizeof_unique(entry)  # entry dict
             attrs = entry.get("attributes", {})
-            entity_bytes += sys.getsizeof(attrs)
+            entity_bytes += _sizeof_unique(attrs)
             for attr_k, attr_v in attrs.items():
-                entity_bytes += sys.getsizeof(attr_k)
-                entity_bytes += sys.getsizeof(attr_v)
+                entity_bytes += _sizeof_unique(attr_k)
+                entity_bytes += _sizeof_unique(attr_v)
                 # Deep-traverse list attributes (e.g., instances lists)
                 if isinstance(attr_v, list):
                     for item in attr_v:
-                        entity_bytes += sys.getsizeof(item)
+                        entity_bytes += _sizeof_unique(item)
                         if isinstance(item, dict):
                             for k2, v2 in item.items():
-                                entity_bytes += sys.getsizeof(k2) + sys.getsizeof(v2)
+                                entity_bytes += _sizeof_unique(k2) + _sizeof_unique(v2)
 
-        # By-chunk index
-        chunk_index_bytes = sys.getsizeof(self.entity_cache._by_chunk)
+        # By-chunk index (entity ID strings already counted above via _sizeof_unique)
+        chunk_index_bytes = _sizeof_unique(self.entity_cache._by_chunk)
         for chunk_set in self.entity_cache._by_chunk.values():
-            chunk_index_bytes += sys.getsizeof(chunk_set)
+            chunk_index_bytes += _sizeof_unique(chunk_set)
             for eid in chunk_set:
-                chunk_index_bytes += sys.getsizeof(eid)
+                chunk_index_bytes += _sizeof_unique(eid)
 
         # Pair tracker: set of tuples
-        pair_bytes = sys.getsizeof(self.pair_tracker._pairs)
+        pair_bytes = _sizeof_unique(self.pair_tracker._pairs)
         for p in self.pair_tracker._pairs:
-            pair_bytes += sys.getsizeof(p)
+            pair_bytes += _sizeof_unique(p)
 
         # Inverted index: dict of entity_id -> set of tuples
-        index_bytes = sys.getsizeof(self.pair_tracker._entity_pairs)
+        # Entity ID strings and pair tuples may already be counted above.
+        index_bytes = _sizeof_unique(self.pair_tracker._entity_pairs)
         for eid, pair_set in self.pair_tracker._entity_pairs.items():
-            index_bytes += sys.getsizeof(eid)
-            index_bytes += sys.getsizeof(pair_set)
+            index_bytes += _sizeof_unique(eid)
+            index_bytes += _sizeof_unique(pair_set)
             for p in pair_set:
-                index_bytes += sys.getsizeof(p)
+                index_bytes += _sizeof_unique(p)
 
         # Retracted pairs set
-        retracted_bytes = sys.getsizeof(self.pair_tracker._retracted)
+        retracted_bytes = _sizeof_unique(self.pair_tracker._retracted)
         for p in self.pair_tracker._retracted:
-            retracted_bytes += sys.getsizeof(p)
+            retracted_bytes += _sizeof_unique(p)
 
         # Chunk log and processed indices
         meta_bytes = sys.getsizeof(self.chunk_log)
@@ -747,6 +778,62 @@ class IncrementalState:
                 "pairs": len(self.pair_tracker),
                 "retracted": len(self.pair_tracker._retracted),
             },
+        }
+
+    def rebuild_pairs(self, pair_checker: Any) -> dict[str, Any]:
+        """Rebuild all pairs from entity cache using the pair_checker.
+
+        Proves the two-tier architecture: pair state is fully derivable from
+        entity state. The pair tracker (O(n²)) is an optimization cache that
+        can be evicted and rebuilt on-demand from the entity cache (O(n)).
+
+        This method:
+        1. Saves the current pair set
+        2. Clears the pair tracker
+        3. Re-evaluates all C(n,2) entity pairs using pair_checker
+        4. Returns comparison between original and rebuilt pairs
+
+        Args:
+            pair_checker: callable(attrs1, attrs2) -> bool
+
+        Returns:
+            Dict with: original_count, rebuilt_count, match (bool),
+            missing_pairs (in original but not rebuilt),
+            extra_pairs (in rebuilt but not original).
+        """
+        # Save original pairs
+        original_pairs = self.pair_tracker.get_pairs()
+        original_count = len(original_pairs)
+
+        # Clear pair tracker
+        self.pair_tracker = PairTracker()
+
+        # Rebuild from entity cache
+        # Note: entity_cache.get() returns the attributes dict directly
+        ids = sorted(self.entity_cache.get_ids())
+        rebuild_checks = 0
+        for i, id1 in enumerate(ids):
+            attrs1 = self.entity_cache.get(id1) or {}
+            for id2 in ids[i + 1 :]:
+                attrs2 = self.entity_cache.get(id2) or {}
+                rebuild_checks += 1
+                if pair_checker(attrs1, attrs2):
+                    self.pair_tracker.add_pair(id1, id2)
+
+        rebuilt_pairs = self.pair_tracker.get_pairs()
+        rebuilt_count = len(rebuilt_pairs)
+
+        missing = original_pairs - rebuilt_pairs
+        extra = rebuilt_pairs - original_pairs
+
+        return {
+            "original_count": original_count,
+            "rebuilt_count": rebuilt_count,
+            "match": len(missing) == 0 and len(extra) == 0,
+            "missing_pairs": len(missing),
+            "extra_pairs": len(extra),
+            "rebuild_checks": rebuild_checks,
+            "entity_count": len(ids),
         }
 
     def reset(self) -> None:
