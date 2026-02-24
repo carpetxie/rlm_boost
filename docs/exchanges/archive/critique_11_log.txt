@@ -1,19 +1,19 @@
-The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of what I found and wrote:
+Critique written to `docs/exchanges/critique_latest.md`. Here's a summary:
 
-## Key Findings
+## Key Points — Iteration 11
 
-**What's working well:**
-- Condition D (fair efficiency comparison) resolves the prior blocking issue — 79.8% token savings at 100% quality retention
-- k=3 stability is excellent: σ=0.000 across 4 runs, 97.1% A/C
-- The `process_chunk()` library code is sound — monotone merge, no-op detection, retraction accounting all correct
-- Paper tables are now comprehensive with 5-run means
+**The project has reached a strong milestone.** F1=1.0 at 84% token savings on the full 96K corpus is a publishable headline. The separated counterfactual cleanly attributes retraction's value. Architecture is solid with 195 tests passing.
 
-**Top priorities I flagged:**
+**Scores:** Novelty 8/10 (+0.5), Technical Soundness 8.5/10, Benchmark Performance 8.5/10 (+2.0), Scalability 6.5/10, Research Maturity 8/10 (+0.5)
 
-1. **Condition D replication** ($0.06, 30 min) — the headline 79.8% savings is from a single run, and Turn 2 shows a suspicious anomaly (2,052 tokens, 1 iteration for a 2-chunk replay). This must be verified before the paper can claim this number.
+**The One Big Thing:** Run 2-3 more full-corpus replicates (~$0.02, 30 min) to confirm F1=1.0 is stable, not a lucky n=1. The headline claim currently rests on a single API run. At 25K the researcher showed σ=0.004 across 5 runs, but we don't know the variance at 19K chars/chunk.
 
-2. **Cross-task Condition D** ($0.12) — run on Tasks 3/6 to confirm efficiency generalizes
+**3rd-Party Clarity Test:** Tables 11-13 all pass. The headline result gets a ⚠️ PARTIAL PASS due to the n=1 problem.
 
-3. **Dynamic context proof-of-concept** ($1-2, 2 hrs) — after 15 iterations, zero experiments test the thesis motivation (dynamic context). Even a minimal 3-turn experiment with genuine entity attribute changes would strengthen the paper's framing.
+**Top priorities:**
+1. Multi-run stability at full corpus (HIGHEST — ~$0.02)
+2. Full-corpus Tasks 3 & 6 (HIGH — ~$0.10) 
+3. Per-turn token comparison figure (MEDIUM — $0)
+4. Cross-model spot check (LOW-MEDIUM — ~$0.50)
 
-**Code issues:** `process_chunk()` mutates caller's dicts during monotone merge (needs documentation), no test coverage for the Condition D code generator (which already had 2 regex bugs), and a cherry-picking risk in paper tables showing "best run" alongside means.
+**Code issues:** `apply_edits()` doesn't track `_total_pair_checks` (telemetry gap), `select_entities_to_edit()` iterates unsorted dicts (reproducibility), no temperature/seed control in experiment runner.
