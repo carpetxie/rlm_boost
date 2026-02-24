@@ -184,7 +184,7 @@ def select_entities_to_edit(
     edits = {}
 
     # Downgrade: qualifying -> non-qualifying
-    for i, (uid, attrs) in enumerate(qualifying.items()):
+    for i, (uid, attrs) in enumerate(sorted(qualifying.items())):
         if i >= num_downgrade:
             break
         # Replace all labels with a non-qualifying one
@@ -196,7 +196,7 @@ def select_entities_to_edit(
 
     # Upgrade: non-qualifying -> qualifying
     target_label = sorted(qualifying_labels)[0]  # pick first qualifying label
-    for i, (uid, attrs) in enumerate(non_qualifying.items()):
+    for i, (uid, attrs) in enumerate(sorted(non_qualifying.items())):
         if i >= num_upgrade:
             break
         edits[uid] = {
