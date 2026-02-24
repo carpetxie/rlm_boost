@@ -973,3 +973,146 @@ class TestConditionDCodeGeneration:
             # Check each process_chunk call includes monotone_attrs
             chunk_section = code.split(f"# Process chunk {ci}")[1] if ci < 2 else code.split(f"# Process chunk {ci}")[1]
             assert 'monotone_attrs={"qualifying"}' in chunk_section
+
+
+# =============================================================================
+# verify_lossless() Tests (Iteration 15 — External Reviewer Concern #1)
+# =============================================================================
+
+
+class TestVerifyLossless:
+    """Tests for IncrementalState.verify_lossless() — proves cache is lossless."""
+
+    def test_lossless_after_one_chunk(self):
+        """After processing 1 chunk, cache contains exactly those entities."""
+        state = IncrementalState()
+        state.process_chunk(0, {"u1": {"x": 1}, "u2": {"x": 2}}, pair_checker=None)
+        result = state.verify_lossless({"u1", "u2"})
+        assert result["is_lossless"] is True
+        assert result["expected_count"] == 2
+        assert result["cached_count"] == 2
+        assert result["missing_ids"] == []
+        assert result["extra_ids"] == []
+
+    def test_lossless_after_three_chunks(self):
+        """After 3 chunks, cache contains union of all entities from chunks 0-2."""
+        state = IncrementalState()
+        state.process_chunk(0, {"u1": {"x": 1}, "u2": {"x": 2}}, pair_checker=None)
+        state.process_chunk(1, {"u3": {"x": 3}}, pair_checker=None)
+        state.process_chunk(2, {"u4": {"x": 4}, "u5": {"x": 5}}, pair_checker=None)
+        result = state.verify_lossless({"u1", "u2", "u3", "u4", "u5"})
+        assert result["is_lossless"] is True
+        assert result["expected_count"] == 5
+        assert result["cached_count"] == 5
+
+    def test_detects_missing_entity(self):
+        """verify_lossless correctly reports missing entities."""
+        state = IncrementalState()
+        state.process_chunk(0, {"u1": {"x": 1}}, pair_checker=None)
+        # Expect u1 and u2, but u2 was never added
+        result = state.verify_lossless({"u1", "u2"})
+        assert result["is_lossless"] is False
+        assert "u2" in result["missing_ids"]
+        assert result["extra_ids"] == []
+
+    def test_detects_extra_entity(self):
+        """verify_lossless correctly reports extra entities."""
+        state = IncrementalState()
+        state.process_chunk(0, {"u1": {"x": 1}, "u2": {"x": 2}}, pair_checker=None)
+        # Expect only u1, but cache has u2 too
+        result = state.verify_lossless({"u1"})
+        assert result["is_lossless"] is False
+        assert result["missing_ids"] == []
+        assert "u2" in result["extra_ids"]
+
+    def test_lossless_after_updates(self):
+        """Updates don't drop entities — cache is still lossless."""
+        state = IncrementalState()
+        state.process_chunk(0, {"u1": {"x": 1}, "u2": {"x": 2}}, pair_checker=None)
+        # u1 updated in chunk 1 — should NOT be dropped
+        state.process_chunk(1, {"u1": {"x": 99}, "u3": {"x": 3}}, pair_checker=None)
+        result = state.verify_lossless({"u1", "u2", "u3"})
+        assert result["is_lossless"] is True
+        assert result["cached_count"] == 3
+
+    def test_lossless_with_integer_ids(self):
+        """Works with integer entity IDs (converted to str internally)."""
+        state = IncrementalState()
+        state.process_chunk(0, {123: {"x": 1}, 456: {"x": 2}}, pair_checker=None)
+        result = state.verify_lossless({123, 456})
+        assert result["is_lossless"] is True
+
+
+# =============================================================================
+# memory_usage() Tests (Iteration 15 — External Reviewer Concern #2)
+# =============================================================================
+
+
+class TestMemoryUsage:
+    """Tests for IncrementalState.memory_usage() — memory profiling."""
+
+    def test_empty_state_has_minimal_memory(self):
+        """Empty state should have very low memory."""
+        state = IncrementalState()
+        mem = state.memory_usage()
+        assert mem["total_bytes"] > 0  # not zero (overhead of empty dicts)
+        assert mem["total_kb"] < 1.0  # less than 1 KB for empty state
+        assert mem["counts"]["entities"] == 0
+        assert mem["counts"]["pairs"] == 0
+
+    def test_memory_increases_with_entities(self):
+        """Memory should increase when entities are added."""
+        state = IncrementalState()
+        mem_before = state.memory_usage()["total_bytes"]
+
+        state.process_chunk(0, {
+            f"u{i}": {"name": f"user_{i}", "type": "person", "score": i}
+            for i in range(100)
+        }, pair_checker=None)
+
+        mem_after = state.memory_usage()
+        assert mem_after["total_bytes"] > mem_before
+        assert mem_after["counts"]["entities"] == 100
+
+    def test_memory_increases_with_pairs(self):
+        """Memory should increase substantially when pairs are added."""
+        state = IncrementalState()
+
+        def always_match(a, b):
+            return True
+
+        # 50 entities → C(50,2) = 1225 pairs
+        state.process_chunk(0, {
+            f"u{i}": {"x": 1} for i in range(50)
+        }, pair_checker=always_match)
+
+        mem = state.memory_usage()
+        assert mem["counts"]["entities"] == 50
+        assert mem["counts"]["pairs"] == 1225
+        assert mem["pair_tracker_bytes"] > 0
+        assert mem["inverted_index_bytes"] > 0
+
+    def test_component_breakdown_sums_to_total(self):
+        """Component breakdown should roughly sum to total."""
+        state = IncrementalState()
+        state.process_chunk(0, {
+            f"u{i}": {"qualifying": True} for i in range(20)
+        }, pair_checker=lambda a, b: True)
+
+        mem = state.memory_usage()
+        component_sum = sum(mem["component_breakdown"].values())
+        # Allow small rounding error (1 KB)
+        assert abs(component_sum - mem["total_kb"]) < 1.0
+
+    def test_memory_report_has_all_fields(self):
+        """Verify all expected fields are present."""
+        state = IncrementalState()
+        mem = state.memory_usage()
+        assert "entity_cache_bytes" in mem
+        assert "pair_tracker_bytes" in mem
+        assert "inverted_index_bytes" in mem
+        assert "total_bytes" in mem
+        assert "total_kb" in mem
+        assert "total_mb" in mem
+        assert "component_breakdown" in mem
+        assert "counts" in mem
