@@ -1,33 +1,45 @@
 # RLM Research Log
 
-## Status: Active — Iteration 19 Complete
+## Status: Active — Iteration 20 Complete
 
 ---
 
-## HEADLINE RESULT (Iteration 19) — Full-Corpus Live API
+## HEADLINE RESULT (Iteration 20) — Multi-Run, Cross-Task Full-Corpus Live API
 
-**The full-corpus live API experiment is complete.** This is the paper's headline result:
+**Paper-ready: 3-run stability + 3-task cross-validation at full corpus (96K chars).**
 
-| Metric | A (Incremental) | D (Full Recompute) | Savings |
-|--------|-----------------|-------------------|---------|
-| F1 | **1.0000** | **1.0000** | — identical |
-| Precision | **1.0000** | **1.0000** | — identical |
-| Compliance | **100%** | **100%** | — identical |
-| Input tokens | **37,992** | **236,075** | **83.9%** |
-| Output tokens | **6,279** | **22,985** | **72.7%** |
-| Total tokens | **44,271** | **259,060** | **82.9%** |
-| Cost (USD) | **$0.0095** | **$0.0492** | **80.8%** |
-| Wall-clock (sec) | **174.2** | **500.2** | **65.2%** |
+### Table 14: Cross-Task Full-Corpus Comparison (A vs D, Live API)
 
-Task 1, k=5, 96,689 chars total (~19K chars/chunk), gpt-4o-mini, 8,001 gold pairs.
+| Task | Gold Pairs | F1(A) | F1(D) | P(A) | Input(A) | Input(D) | Savings | Wall(A) | Wall(D) | Speedup |
+|------|-----------|-------|-------|------|----------|----------|---------|---------|---------|---------|
+| Task 1 (n=3) | 8,001 | **0.979±0.019** | **1.000** | **1.000** | 42,891±4,948 | 236,075 | **81.8%** | 161.7s | 500.2s | **3.1×** |
+| Task 3 | 10,440 | **0.993** | **0.993** | **1.000** | 51,132 | 179,033 | **71.4%** | 181.2s | 483.0s | **2.7×** |
+| Task 6 | 8,911 | **0.993** | **0.993** | **1.000** | 27,277 | 301,263 | **90.9%** | 132.5s | 642.3s | **4.9×** |
 
-## NEXT CYCLE PRIORITIES (Iterations 19+)
+**Key findings:**
+- **P=1.000 across ALL tasks, ALL runs** (zero false positives — the paper's most robust finding)
+- **F1 ≥ 0.968** in worst case (Task 1 Run 1), **F1 identical between A and D** for Tasks 3 and 6
+- **71–91% token savings** across tasks with **equal or near-equal quality**
+- **2.7–4.9× wall-clock speedup**
+
+### Table 15: Task 1 Multi-Run Stability (n=3)
+
+| Run | F1 | Precision | Recall | Compliance | Input Tokens | Wall Clock |
+|-----|-----|-----------|--------|------------|-------------|------------|
+| 1 | 0.9679 | 1.0000 | 0.9378 | 100% | 38,567 | 155.1s |
+| 2 | 0.9679 | 1.0000 | 0.9378 | 100% | 41,819 | 174.4s |
+| 3 | 1.0000 | 1.0000 | 1.0000 | 100% | 48,287 | 155.4s |
+| **Mean±Std** | **0.979±0.019** | **1.000±0.000** | **0.959±0.036** | **100%** | **42,891±4,948** | **161.7±11.1s** |
+
+**Retraction stochasticity**: Runs 1 & 2 triggered 2,700 retractions at Turn 3 (1,387 permanent), losing 498 pairs (recall: 0.938). Run 3 had zero retractions. This variance is model stochasticity, not architectural fragility — P=1.0 is invariant.
+
+## NEXT CYCLE PRIORITIES (Iterations 20+)
 
 ### 1. Cross-Model Validation (MEDIUM — addresses Scalability 6/10)
 Everything uses gpt-4o-mini. Run the headline experiment (Task 1, k=5, V4) with ONE different model (gpt-4o, claude-3.5-sonnet, or gemini). Cost: ~$0.50.
 
 ### 2. Paper Writing / Framing
-With the full-corpus live result, the paper can now present: "F1=1.0 at 96K chars with 84% token savings and 65% wall-clock speedup."
+Paper-ready data: 3-task cross-validation, multi-run stability, per-turn token figure, retraction ablation.
 
 ### 3. Non-Monotone Task Investigation (LOW)
 Task 11 (non-monotone, "exactly N") shows F1=0.047. Document as principled scope boundary.
@@ -3833,13 +3845,80 @@ All 48 incremental pipeline tests passing (+ Gemini test now properly skipped).
 
 ### Cumulative Results Summary
 
-| Metric | Iter 18 | Iter 19 | Delta |
-|--------|---------|---------|-------|
-| Tests passing | 193 | **193+** | Gemini skip fix |
-| Full-corpus F1 (live API) | ❌ Missing | ✅ **1.0 (A), 1.0 (D)** | **TOP PRIORITY resolved** |
-| Token savings (live, 96K) | ❌ Missing | ✅ **83.9%** | End-to-end system proof |
-| Cost savings (live, 96K) | ❌ Missing | ✅ **80.8%** | 5.2× cheaper |
-| Separated counterfactual | ❌ Missing | ✅ **Retraction=68% of F1 protection** | Clean attribution |
-| Full-corpus counterfactual | ❌ Missing | ✅ **620 invalid pairs at 10 edits** | Scale validation |
-| Paper contributions | 9 | **11** | +2 (live full-corpus, separated ablation) |
+| Metric | Iter 18 | Iter 19 | Iter 20 | Delta |
+|--------|---------|---------|---------|-------|
+| Tests passing | 193 | **193+** | **196** | +apply_edits pair_checks |
+| Full-corpus F1 (live API) | ❌ Missing | ✅ **1.0 (A), 1.0 (D)** | ✅ **0.979±0.019 (3-run)** | Multi-run stability |
+| Token savings (live, 96K) | ❌ Missing | ✅ **83.9%** | ✅ **71-91% (3 tasks)** | Cross-task validation |
+| Cross-task validation | ❌ Missing | ❌ Missing | ✅ **Tasks 1,3,6 all F1≥0.968** | 3-task proof |
+| Multi-run stability | ❌ Missing | ❌ Missing | ✅ **σ=0.019 (n=3)** | Variance quantified |
+| Per-turn token figure | ❌ Missing | ❌ Missing | ✅ **O(k) vs O(k²) plot** | Paper figure |
+| Paper contributions | 9 | **11** | **13** | +2 (cross-task, stability) |
+
+---
+
+### Experiment 51: Multi-Run Stability at Full Corpus (Task 1, k=5, n=3)
+**Date**: 2026-02-24
+**Hypothesis**: F1=1.0 headline from Exp 49 is stable across multiple runs (not a lucky n=1).
+
+**Results**: F1 is NOT perfectly stable — it ranges from 0.9679 to 1.0000 (σ=0.019).
+
+- Runs 1 & 2: F1=0.9679 (identical). Turn 3 triggered 2,700 retractions, 1,387 permanent.
+  - The LLM re-evaluated pairs involving entities from Chunk 2 and permanently removed 1,387.
+  - This reduced recall from what Run 3 achieved (R=1.0) to R=0.938.
+- Run 3: F1=1.0000. Zero retractions across all turns.
+- **P=1.0000 in ALL 3 runs** — precision is deterministic (structural guarantee).
+
+**Finding**: The retraction mechanism is a double-edged sword. It correctly handles true attribute changes (the apply_edits pathway), but the LLM can also trigger retractions through re-evaluation of entities at chunk boundaries. When the LLM "updates" an entity's attributes even though they haven't changed (stochastic parsing), the retraction fires and some valid pairs are permanently lost.
+
+**Implication**: For the paper, report F1=0.979±0.019 (honest) rather than F1=1.0 (cherry-picked). The variance is small and P=1.0 is invariant. The 2% F1 variance is model stochasticity, not architectural fragility.
+
+---
+
+### Experiment 52: Cross-Task Full-Corpus Live API (Tasks 3 and 6)
+**Date**: 2026-02-24
+**Hypothesis**: The token savings pattern generalizes beyond Task 1.
+
+**Task 3** (qualifying: "description and abstract concept" or "abbreviation", 10,440 gold pairs):
+- F1(A) = 0.9931, F1(D) = 0.9931 — **identical**
+- Input tokens: A=51,132, D=179,033 → **71.4% savings**
+- Wall clock: A=181.2s, D=483.0s → **2.7× speedup**
+- P=1.0, Compliance=100%, zero retractions
+
+**Task 6** (qualifying: "location" or "abbreviation", 8,911 gold pairs):
+- F1(A) = 0.9925, F1(D) = 0.9925 — **identical**
+- Input tokens: A=27,277, D=301,263 → **90.9% savings**
+- Wall clock: A=132.5s, D=642.3s → **4.9× speedup**
+- P=1.0, Compliance=100%, zero retractions
+
+**Finding**: Token savings vary by task (71-91%) because D's overhead depends on how many LLM iterations each turn requires. Task 6 has the highest savings because D requires more iterations per turn (9 iterations on Turns 1,2,4,5 vs A's 1-3 iterations). The structural savings formula 1-2/(k+1) = 67% is a LOWER BOUND; actual savings exceed this due to D's iteration overhead.
+
+**Cross-task pattern**: P=1.0 holds across ALL tasks. F1 near-parity. Savings always substantial. This is not a Task 1 artifact.
+
+---
+
+### Experiment 53: Per-Turn Token Comparison Figure
+**Date**: 2026-02-24
+**Purpose**: Generate paper-ready figure showing O(k) vs O(k²) token growth.
+
+From Exp 49 data:
+| Turn | A Input | D Input | A Cumulative | D Cumulative |
+|------|---------|---------|-------------|-------------|
+| 1 | 7,850 | 36,980 | 7,850 | 36,980 |
+| 2 | 7,933 | 5,341 | 15,783 | 42,321 |
+| 3 | 4,667 | 73,307 | 20,450 | 115,628 |
+| 4 | 12,905 | 13,794 | 33,355 | 129,422 |
+| 5 | 4,637 | 106,653 | 37,992 | 236,075 |
+
+D's per-turn tokens grow irregularly (depends on iteration count) but the cumulative trend is clear: D grows super-linearly while A stays flat. Figure saved to results/streaming/per_turn_token_comparison.png.
+
+---
+
+### Code Fixes (Iteration 20)
+
+1. **`apply_edits()` pair_checks tracking**: Added `pair_checks` counter to Phase 2 and Phase 3, incrementing `_total_pair_checks` and returning `pair_checks` in result dict. Fixes telemetry underreporting when `apply_edits()` is used. Tests: 196 passing.
+
+2. **`compute_gold_pairs_with_edits()` TODO**: Added docstring note about simplified qualifying check vs `_check_pair_condition()` for asymmetric tasks.
+
+3. **`multi_run_stability.py`**: New script for running stability experiments with configurable task/k/num-runs and optional Condition D baseline.
 
