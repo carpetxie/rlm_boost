@@ -70,6 +70,10 @@ def main():
     parser.add_argument("--output-dir", default="results/streaming", help="Output directory")
     parser.add_argument("--include-d", action="store_true", help="Also run Condition D once")
     parser.add_argument("--model", default="gpt-4o-mini", help="Model to use")
+    parser.add_argument(
+        "--temperature", type=float, default=None,
+        help="Temperature for LLM calls (default: model default)"
+    )
     parser.add_argument("--verbose", action="store_true", help="Verbose RLM output")
     args = parser.parse_args()
 
@@ -123,6 +127,7 @@ def main():
             model=args.model,
             verbose=args.verbose,
             run_id=i,
+            temperature=args.temperature,
         )
         wall_total = time.time() - t0
 
@@ -143,6 +148,19 @@ def main():
         compliance = result_a.get("compliance_rate", 0)
         progression_wall = extract_wall_clock(result_a)
 
+        # Extract per-turn retraction counts from f1_progression
+        progression = result_a.get("f1_progression", [])
+        final_perm_retractions = progression[-1].get("permanent_retractions", 0) if progression else 0
+        final_noop_retractions = progression[-1].get("noop_retractions", 0) if progression else 0
+        per_turn_retractions = [
+            {
+                "turn": t.get("turn", j + 1),
+                "noop_retractions": t.get("noop_retractions", 0),
+                "permanent_retractions": t.get("permanent_retractions", 0),
+            }
+            for j, t in enumerate(progression)
+        ]
+
         run_results.append({
             "run": i,
             "f1": f1,
@@ -153,6 +171,9 @@ def main():
             "compliance_rate": compliance,
             "wall_clock_sec": round(progression_wall, 2),
             "total_wall_sec": round(wall_total, 2),
+            "permanent_retractions": final_perm_retractions,
+            "noop_retractions": final_noop_retractions,
+            "per_turn_retractions": per_turn_retractions,
         })
 
         print(f"  F1={f1:.4f} | P={precision:.4f} | R={recall:.4f} | "
@@ -234,6 +255,7 @@ def main():
         "k": args.k,
         "num_runs": args.num_runs,
         "model": args.model,
+        "temperature": args.temperature,
         "gold_pairs_count": len(gold_pairs),
         "total_context_chars": total_chars,
         "runs": run_results,
@@ -294,8 +316,10 @@ def main():
             "wall_clock_sec": extract_wall_clock(result_d),
         }
 
+    temp_suffix = f"_temp{args.temperature}" if args.temperature is not None else ""
+    model_suffix = f"_{args.model.replace('/', '_')}" if args.model != "gpt-4o-mini" else ""
     summary_path = (
-        output_dir / f"stability_task{args.task}_k{args.k}_n{args.num_runs}.json"
+        output_dir / f"stability_task{args.task}_k{args.k}_n{args.num_runs}{model_suffix}{temp_suffix}.json"
     )
     summary_path.write_text(json.dumps(summary, indent=2, default=str))
     print(f"\nAggregate summary saved to {summary_path}")
