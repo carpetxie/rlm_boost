@@ -725,6 +725,65 @@ class TestApplyEdits:
         assert stats["pairs_readded"] == 1  # re-added after re-check
         assert stats["pairs_after"] == 1  # pair preserved
 
+    def test_multi_entity_edit_shared_pair_deduplicated(self):
+        """Two edited entities sharing a pair: retraction count is deduplicated."""
+        state = IncrementalState()
+        checker = self._make_qualifying_checker()
+
+        # Setup: 3 qualifying entities -> 3 pairs: (u1,u2), (u1,u3), (u2,u3)
+        state.process_chunk(0, {
+            "u1": {"qualifying": True},
+            "u2": {"qualifying": True},
+            "u3": {"qualifying": True},
+        }, pair_checker=checker)
+        assert len(state.pair_tracker) == 3
+
+        # Edit both u1 and u2 (downgrade both).
+        # Pair (u1,u2) is shared. Two-phase ensures it's counted once.
+        stats = state.apply_edits(
+            {"u1": {"qualifying": False}, "u2": {"qualifying": False}},
+            pair_checker=checker,
+        )
+        # u1 has pairs (u1,u2) and (u1,u3) -> 2 retracted
+        # u2 has pair (u2,u3) -> 1 retracted (u1,u2 already retracted by u1's pass)
+        # Total deduplicated = 3 (all 3 pairs)
+        assert stats["total_retracted"] == 3
+        # None re-added (both u1 and u2 are now non-qualifying)
+        assert stats["pairs_readded"] == 0
+        # Only u3 is qualifying, no pairs remain
+        assert stats["pairs_after"] == 0
+
+    def test_multi_entity_upgrade_upgrade_discovers_pair(self):
+        """Two non-qualifying entities upgraded: their mutual pair is discovered."""
+        state = IncrementalState()
+        checker = self._make_qualifying_checker()
+
+        # Setup: u1 qualifying, u2 and u3 non-qualifying
+        state.process_chunk(0, {
+            "u1": {"qualifying": True},
+            "u2": {"qualifying": False},
+            "u3": {"qualifying": False},
+        }, pair_checker=checker)
+        assert len(state.pair_tracker) == 0  # no qualifying pairs
+
+        # Upgrade both u2 and u3
+        stats = state.apply_edits(
+            {"u2": {"qualifying": True}, "u3": {"qualifying": True}},
+            pair_checker=checker,
+        )
+        # Should discover (u1,u2), (u1,u3), and (u2,u3)
+        assert stats["pairs_after"] == 3
+        assert stats["new_pairs_from_edits"] == 3
+
+    def test_has_pair_method(self):
+        """PairTracker.has_pair() works correctly."""
+        from rlm.core.incremental import PairTracker
+        pt = PairTracker()
+        pt.add_pair("a", "b")
+        assert pt.has_pair("a", "b") is True
+        assert pt.has_pair("b", "a") is True  # order-independent
+        assert pt.has_pair("a", "c") is False
+
 
 class TestProcessChunkDeduplication:
     """Test the idempotency guard added in Iteration 8 (Failure Mode C fix)."""
