@@ -327,6 +327,9 @@ class IncrementalState:
             )
             return self._processed_chunk_indices[chunk_index]
 
+        # Snapshot existing IDs BEFORE adding new entities. If an entity ID in
+        # new_entities already exists, it's treated as an update (updated_ids),
+        # not a new entity, and the updated-entity sweep handles re-evaluation.
         existing_ids = self.entity_cache.get_ids()
         updated_ids = set()
         new_ids = set()
@@ -623,6 +626,127 @@ class IncrementalState:
             "permanent_retractions": max(0, permanent),
             "pairs_before": pairs_before,
             "pairs_after": pairs_after,
+        }
+
+    def verify_lossless(self, expected_entity_ids: set[str]) -> dict[str, Any]:
+        """Verify that entity_cache contains exactly the expected entities.
+
+        This is the programmatic proof that the REPL state is lossless: after
+        processing chunks 0..k, the EntityCache must contain EXACTLY the union
+        of all entity IDs seen in those chunks — no drops, no phantom additions.
+
+        The cache is lossless by construction (EntityCache.add() never removes),
+        but this method provides runtime verification for external auditing.
+
+        Args:
+            expected_entity_ids: The complete set of entity IDs that should be
+                in the cache after processing all chunks so far.
+
+        Returns:
+            Dict with: is_lossless, missing_ids, extra_ids, expected_count,
+            cached_count, chunks_processed.
+        """
+        cached_ids = self.entity_cache.get_ids()
+        # Convert both to comparable types (str)
+        cached_str = {str(x) for x in cached_ids}
+        expected_str = {str(x) for x in expected_entity_ids}
+        missing = sorted(expected_str - cached_str)
+        extra = sorted(cached_str - expected_str)
+        return {
+            "is_lossless": len(missing) == 0 and len(extra) == 0,
+            "missing_ids": missing,
+            "extra_ids": extra,
+            "expected_count": len(expected_str),
+            "cached_count": len(cached_str),
+            "chunks_processed": len(self.chunk_log),
+        }
+
+    def memory_usage(self) -> dict[str, Any]:
+        """Report memory usage in bytes for each component.
+
+        Uses sys.getsizeof for shallow container sizes plus deep traversal
+        of entity attributes and pair tuples. This gives an accurate lower
+        bound on the Python-level memory footprint.
+
+        Useful for addressing the "memory will blow up" concern: shows that
+        REPL state memory is negligible compared to LLM context window sizes.
+        """
+        import sys
+
+        # Entity cache: dict of dicts with nested attributes
+        entity_bytes = sys.getsizeof(self.entity_cache._entities)
+        for eid, entry in self.entity_cache._entities.items():
+            entity_bytes += sys.getsizeof(eid)  # key string
+            entity_bytes += sys.getsizeof(entry)  # entry dict
+            attrs = entry.get("attributes", {})
+            entity_bytes += sys.getsizeof(attrs)
+            for attr_k, attr_v in attrs.items():
+                entity_bytes += sys.getsizeof(attr_k)
+                entity_bytes += sys.getsizeof(attr_v)
+                # Deep-traverse list attributes (e.g., instances lists)
+                if isinstance(attr_v, list):
+                    for item in attr_v:
+                        entity_bytes += sys.getsizeof(item)
+                        if isinstance(item, dict):
+                            for k2, v2 in item.items():
+                                entity_bytes += sys.getsizeof(k2) + sys.getsizeof(v2)
+
+        # By-chunk index
+        chunk_index_bytes = sys.getsizeof(self.entity_cache._by_chunk)
+        for chunk_set in self.entity_cache._by_chunk.values():
+            chunk_index_bytes += sys.getsizeof(chunk_set)
+            for eid in chunk_set:
+                chunk_index_bytes += sys.getsizeof(eid)
+
+        # Pair tracker: set of tuples
+        pair_bytes = sys.getsizeof(self.pair_tracker._pairs)
+        for p in self.pair_tracker._pairs:
+            pair_bytes += sys.getsizeof(p)
+
+        # Inverted index: dict of entity_id -> set of tuples
+        index_bytes = sys.getsizeof(self.pair_tracker._entity_pairs)
+        for eid, pair_set in self.pair_tracker._entity_pairs.items():
+            index_bytes += sys.getsizeof(eid)
+            index_bytes += sys.getsizeof(pair_set)
+            for p in pair_set:
+                index_bytes += sys.getsizeof(p)
+
+        # Retracted pairs set
+        retracted_bytes = sys.getsizeof(self.pair_tracker._retracted)
+        for p in self.pair_tracker._retracted:
+            retracted_bytes += sys.getsizeof(p)
+
+        # Chunk log and processed indices
+        meta_bytes = sys.getsizeof(self.chunk_log)
+        for entry in self.chunk_log:
+            meta_bytes += sys.getsizeof(entry)
+        meta_bytes += sys.getsizeof(self._processed_chunk_indices)
+
+        total = entity_bytes + chunk_index_bytes + pair_bytes + index_bytes + retracted_bytes + meta_bytes
+
+        return {
+            "entity_cache_bytes": entity_bytes,
+            "chunk_index_bytes": chunk_index_bytes,
+            "pair_tracker_bytes": pair_bytes,
+            "inverted_index_bytes": index_bytes,
+            "retracted_set_bytes": retracted_bytes,
+            "metadata_bytes": meta_bytes,
+            "total_bytes": total,
+            "total_kb": round(total / 1024, 1),
+            "total_mb": round(total / (1024 * 1024), 3),
+            "component_breakdown": {
+                "entity_cache": round(entity_bytes / 1024, 1),
+                "chunk_index": round(chunk_index_bytes / 1024, 1),
+                "pair_set": round(pair_bytes / 1024, 1),
+                "inverted_index": round(index_bytes / 1024, 1),
+                "retracted": round(retracted_bytes / 1024, 1),
+                "metadata": round(meta_bytes / 1024, 1),
+            },
+            "counts": {
+                "entities": len(self.entity_cache),
+                "pairs": len(self.pair_tracker),
+                "retracted": len(self.pair_tracker._retracted),
+            },
         }
 
     def reset(self) -> None:
