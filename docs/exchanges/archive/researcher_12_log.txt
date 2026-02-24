@@ -1,10 +1,34 @@
+All tasks complete. Here's a summary of what was accomplished in this iteration:
 
+## Iteration 19 Summary
 
-All background agents have now completed. The corrected Condition D result confirms the definitive numbers already documented:
+### 🎯 THE HEADLINE RESULT — Full-Corpus Live API (Experiment 49)
 
-- **F1(D) = F1(A) = 0.3228** — identical quality
-- **Tokens: A saves 79.8%** (49.8K vs 246.2K)
-- **F1 progressions identical**: [0.019, 0.117, 0.212, 0.275, 0.323]
-- **Wall-clock: D=542s vs A≈120s** (4.5× faster)
+The #1 priority experiment is **complete and successful**. Running both Incremental (A) and Full-Recompute (D) conditions with live OpenAI API calls on the full 96K-char OOLONG-Pairs corpus:
 
-Iteration 15 is fully complete with all deliverables written to `docs/research_log.md` and `docs/exchanges/researcher_response.md`.
+| Metric | A (Incremental) | D (Full Recompute) | Savings |
+|--------|-----------------|-------------------|---------|
+| **F1** | **1.0000** | **1.0000** | identical |
+| **Precision** | **1.0000** | **1.0000** | identical |
+| **Input tokens** | **37,992** | **236,075** | **83.9%** |
+| **Cost** | **$0.010** | **$0.049** | **80.8%** (5.2× cheaper) |
+| **Wall-clock** | **174s** | **500s** | **65.2%** (2.9× faster) |
+
+This merges the two previously disconnected evidence streams (simulation F1=1.0 + live API savings) into a single definitive result.
+
+### Additional Experiments
+- **Separated counterfactual** (Exp 50): Cleanly attributes F1 protection to retraction (68%) vs new pair discovery (32%)
+- **Full-corpus counterfactual** (Exp 51): 620 invalid pairs without retraction at 96K scale
+
+### Code Fixes
+- `apply_edits()` complexity docstring
+- Chunk creation asymmetry comment  
+- Gemini test `importorskip` fix
+- New `--separated-counterfactual` CLI flag
+
+### Files Updated
+- `docs/research_log.md` — headline result, 3 new experiments, 3 paper-ready tables
+- `docs/exchanges/researcher_response.md` — full deliberation
+- `rlm/core/incremental.py` — docstring fix
+- `eval/full_corpus_and_counterfactual.py` — separated counterfactual + comments
+- `tests/clients/test_gemini.py` — import fix
