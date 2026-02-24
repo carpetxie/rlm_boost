@@ -1,24 +1,36 @@
 # RLM Research Log
 
-## Status: Active — Iteration 18 Complete
+## Status: Active — Iteration 19 Complete
 
 ---
 
-## NEXT CYCLE PRIORITIES (Iterations 18+)
+## HEADLINE RESULT (Iteration 19) — Full-Corpus Live API
 
-The core contribution is validated. The next cycle should focus on **strengthening the claims** and **removing remaining critiques**:
+**The full-corpus live API experiment is complete.** This is the paper's headline result:
 
-### 1. Full-Corpus Run (HIGH — removes the "artificial budget" critique)
-All experiments use only 25K of the 96K-char corpus. F1 is capped at ~0.34 because 80% of entities are never seen. Run Condition A (incremental) and Condition D (full-recompute) on the FULL 96K corpus (k=5, ~19K chars/chunk). Expected: much higher absolute F1, same relative savings. Condition C Full already achieves F1=1.0 on 96K chars. Cost: ~$0.50-1.00.
+| Metric | A (Incremental) | D (Full Recompute) | Savings |
+|--------|-----------------|-------------------|---------|
+| F1 | **1.0000** | **1.0000** | — identical |
+| Precision | **1.0000** | **1.0000** | — identical |
+| Compliance | **100%** | **100%** | — identical |
+| Input tokens | **37,992** | **236,075** | **83.9%** |
+| Output tokens | **6,279** | **22,985** | **72.7%** |
+| Total tokens | **44,271** | **259,060** | **82.9%** |
+| Cost (USD) | **$0.0095** | **$0.0492** | **80.8%** |
+| Wall-clock (sec) | **174.2** | **500.2** | **65.2%** |
 
-### 2. Cross-Model Validation (MEDIUM — addresses Scalability 6/10)
-Everything uses gpt-4o-mini. Run the headline experiment (Task 1, k=5, V4) with ONE different model (gpt-4o, claude-3.5-sonnet, or gemini). Even a single run showing similar patterns (P=1.0, similar A/C ratio, similar savings) would boost the Scalability score. Cost: ~$0.50.
+Task 1, k=5, 96,689 chars total (~19K chars/chunk), gpt-4o-mini, 8,001 gold pairs.
 
-### 3. Non-Monotone Task Investigation (LOW-MEDIUM — addresses scope boundary)
-Task 11 (non-monotone, "exactly N") currently shows F1=0.047. The framework works but accuracy is poor. Investigate whether a task-specific check_pair for "exactly N" conditions can improve this, or document it as a principled scope boundary.
+## NEXT CYCLE PRIORITIES (Iterations 19+)
 
-### 4. Paper Writing / Framing (when experiments are done)
-With the dynamic context experiment complete, the paper can use "Incremental and Dynamic Computation for LLM Programs" framing. Finalize paper structure, abstract, and claims.
+### 1. Cross-Model Validation (MEDIUM — addresses Scalability 6/10)
+Everything uses gpt-4o-mini. Run the headline experiment (Task 1, k=5, V4) with ONE different model (gpt-4o, claude-3.5-sonnet, or gemini). Cost: ~$0.50.
+
+### 2. Paper Writing / Framing
+With the full-corpus live result, the paper can now present: "F1=1.0 at 96K chars with 84% token savings and 65% wall-clock speedup."
+
+### 3. Non-Monotone Task Investigation (LOW)
+Task 11 (non-monotone, "exactly N") shows F1=0.047. Document as principled scope boundary.
 
 ---
 
@@ -3618,4 +3630,216 @@ All 193 tests passing (45 in test_incremental_pipeline.py including 5 new).
 | F1 | **0.980** | 0.904 | **0.979** | 0.845 |
 | Correct | ✓ | ✗ | ✓ | ✗ |
 
+---
+
+## Iteration 19 (Researcher Iteration 12)
+
+**Focus**: Execute the #1 priority — full-corpus live API experiment. Also: separated counterfactual ablation, full-corpus counterfactual, code fixes.
+
+### Experiment 49: Full-Corpus LIVE API — A vs D (Task 1, k=5, 96K chars)
+
+**Date**: 2026-02-24 | **Cost**: ~$0.06 (actual API spend)
+**Script**: `eval/full_corpus_and_counterfactual.py --full-corpus-live --task 1 --k 5`
+
+**Design**: Run both Condition A (incremental) and Condition D (full-recompute) with LIVE API
+calls on the FULL 96K-char labeled corpus. 5 chunks of ~19,337 chars each. gpt-4o-mini.
+This is the experiment that merges the two evidence streams (simulation + live API).
+
+**Hypothesis**: At 19K chars/chunk (3.8× the previous 5K/chunk), the LLM should still achieve
+100% compliance and F1≈1.0, because fewer turns means less cumulative complexity. Token savings
+should be ≥64% (structural minimum) with additional savings from D's repeated prompt overhead.
+
+**Results**:
+
+| Metric | A (Incremental) | D (Full Recompute) | A/D Savings |
+|--------|-----------------|-------------------|-------------|
+| F1 | **1.0000** | **1.0000** | — identical |
+| Precision | **1.0000** | **1.0000** | — identical |
+| Recall | **1.0000** | **1.0000** | — identical |
+| Compliance | **100%** (5/5) | **100%** (5/5) | — identical |
+| Input tokens | **37,992** | **236,075** | **83.9%** |
+| Output tokens | **6,279** | **22,985** | **72.7%** |
+| Total tokens | **44,271** | **259,060** | **82.9%** |
+| Cost (USD) | **$0.0095** | **$0.0492** | **80.8%** |
+| Wall-clock | **174.2s** | **500.2s** | **65.2%** |
+| Pair checks (sim) | **30,983** | **86,437** | **64.2%** |
+
+**Per-turn progression (A)**:
+
+| Turn | Pairs | F1 | P | R | Input Tok | Time |
+|------|-------|----|---|---|-----------|------|
+| 1 | 1,326 | 0.284 | 1.0 | 0.166 | 7,850 | 26.8s |
+| 2 | 3,403 | 0.597 | 1.0 | 0.425 | 7,933 | 61.7s |
+| 3 | 4,656 | 0.736 | 1.0 | 0.582 | 4,667 | 18.6s |
+| 4 | 5,995 | 0.857 | 1.0 | 0.749 | 12,905 | 52.6s |
+| 5 | 8,001 | 1.000 | 1.0 | 1.000 | 4,637 | 14.6s |
+
+**Per-turn progression (D)**:
+
+| Turn | Chunks Replayed | Input Tok | Time | Iterations |
+|------|----------------|-----------|------|------------|
+| 1 | 1 | 36,980 | 61.7s | 9 |
+| 2 | 2 | 5,341 | 27.6s | 2 |
+| 3 | 3 | 73,307 | 127.3s | 9 |
+| 4 | 4 | 13,794 | 63.7s | 3 |
+| 5 | 5 | 106,653 | 220.0s | 9 |
+
+**Key findings**:
+1. **F1=1.0 at full corpus, live API**: The simulation result (Exp 47) is confirmed by live API.
+   The LLM correctly processes 19K chars/chunk with zero compliance failures.
+2. **83.9% input token savings**: Exceeds the simulation's 64% pair-check savings because D has
+   additional overhead from re-reading all chunks and re-running the REPL template each turn.
+   This is the TOTAL SYSTEM savings, not just the library-level savings.
+3. **80.8% cost savings**: $0.0095 vs $0.0492 — 5.2× cheaper.
+4. **65.2% wall-clock savings**: 174s vs 500s — 2.9× faster.
+5. **D's token usage grows with turn number**: Turn 5 uses 106K input tokens (re-reading 5 chunks)
+   while A's Turn 5 uses only 4.6K (processing only the new chunk).
+6. **Compliance at 19K/chunk = 100%**: Resolves the concern about whether larger chunks would
+   cause compliance degradation. The model handles 19K chars per turn without issues.
+
+**This completes the paper's evidence base.** Both simulation AND live API confirm the same result.
+
+---
+
+### Experiment 50: Separated Counterfactual Ablation — Retraction vs New Pair Discovery
+
+**Date**: 2026-02-24 | **Cost**: $0
+**Script**: `eval/full_corpus_and_counterfactual.py --separated-counterfactual --task 1`
+
+**Design**: Three-way ablation that separates the precision impact (retraction) from the recall
+impact (new pair discovery). Previous counterfactual conflated both mechanisms.
+
+- **(a) Full**: `apply_edits()` — retraction + re-evaluation + new pair discovery (correct)
+- **(b) Retract-only**: retraction + re-evaluation, NO new pair discovery from upgrades
+- **(c) Neither**: no retraction, no new pair discovery
+
+**Results — 5 edits (2 downgrade, 3 upgrade)**:
+
+| Metric | (a) Full | (b) Retract-only | (c) Neither |
+|--------|----------|------------------|-------------|
+| Invalid pairs | **0** | **0** | **99** |
+| Missing new pairs | **0** | **102** | **102** |
+| Precision | **1.000** | **1.000** | **0.922** |
+| Recall | **0.962** | **0.887** | **0.887** |
+| F1 | **0.980** | **0.940** | **0.904** |
+
+**Results — 10 edits (5 downgrade, 5 upgrade)**:
+
+| Metric | (a) Full | (b) Retract-only | (c) Neither |
+|--------|----------|------------------|-------------|
+| Invalid pairs | **0** | **0** | **240** |
+| Missing new pairs | **0** | **100** | **100** |
+| Precision | **1.000** | **1.000** | **0.812** |
+| Recall | **0.959** | **0.880** | **0.880** |
+| F1 | **0.979** | **0.936** | **0.845** |
+
+**Attribution (10 edits)**:
+- F1 drop from missing new pairs (full → retract-only): -0.043 (recall loss only)
+- F1 drop from stale pairs (retract-only → neither): -0.092 (precision loss from 240 invalid pairs)
+- **Stale pair removal (retraction) accounts for 68% of the total F1 protection**
+- **New pair discovery accounts for 32% of the total F1 protection**
+
+**Key findings**:
+1. Retraction and new pair discovery are two distinct mechanisms with separable effects.
+2. Retraction primarily protects PRECISION (removes invalid pairs from downgrades).
+3. New pair discovery primarily protects RECALL (creates pairs for upgraded entities).
+4. Retraction is the more impactful mechanism: 0.092 F1 impact vs 0.043 from new pairs.
+5. The (b) retract-only condition has P=1.0 — retraction alone maintains precision perfectly.
+
+---
+
+### Experiment 51: Full-Corpus Counterfactual (96K chars, k=5)
+
+**Date**: 2026-02-24 | **Cost**: $0
+**Script**: `eval/full_corpus_and_counterfactual.py --full-corpus-counterfactual --task 1 --k 5`
+
+**Design**: Run the no-retraction counterfactual on the FULL 96K corpus instead of the 25K subset.
+At full corpus with F1=1.0 baseline, the damage from skipping retraction is even more dramatic.
+
+**Results — 5 edits**:
+
+| Metric | With Retraction | Without Retraction |
+|--------|----------------|-------------------|
+| Invalid pairs | **0** | **251** |
+| Missing new pairs | **0** | **127** |
+| Precision | **1.000** | **0.969** |
+| F1 | **1.000** | **0.976** |
+
+**Results — 10 edits**:
+
+| Metric | With Retraction | Without Retraction |
+|--------|----------------|-------------------|
+| Invalid pairs | **0** | **620** |
+| Missing new pairs | **0** | **252** |
+| Precision | **1.000** | **0.923** |
+| F1 | **1.000** | **0.945** |
+
+**Key findings**:
+1. At full corpus, invalid pairs from 10 edits jumps to **620** (vs 240 at 25K). This is because
+   the full corpus has more qualifying entities, so each downgraded entity has more existing pairs.
+2. With retraction: F1 = 1.0 (perfect). Without: F1 = 0.945. The 0.055 gap at full corpus is
+   smaller in RELATIVE terms than the 0.134 gap at 25K, but in ABSOLUTE terms the number of
+   invalid pairs (620 vs 240) is much larger.
+3. This confirms retraction is essential at scale — the damage grows with corpus size.
+
+---
+
+### Code Fixes (Iteration 19)
+
+1. **`apply_edits()` complexity docstring**: Added O(E×N) Phase 3 complexity documentation
+   matching the `process_chunk()` standard. (`rlm/core/incremental.py`)
+2. **Chunk creation asymmetry comment**: Documented the last-chunk-larger behavior in
+   `eval/full_corpus_and_counterfactual.py`.
+3. **Gemini test import fix**: Added `pytest.importorskip("google.genai")` to
+   `tests/clients/test_gemini.py` so local developers don't see import failures.
+4. **Separated counterfactual implementation**: New `run_separated_counterfactual()` function
+   and `--separated-counterfactual` CLI flag in `eval/full_corpus_and_counterfactual.py`.
+
+All 48 incremental pipeline tests passing (+ Gemini test now properly skipped).
+
+---
+
+### Updated Paper-Ready Tables
+
+**Table 11: Full-Corpus Live API — Incremental vs Full-Recompute (96K chars, k=5, gpt-4o-mini)**
+
+| Metric | A (Incremental) | D (Full Recompute) | A/D Savings |
+|--------|-----------------|-------------------|-------------|
+| F1 | **1.000** | **1.000** | — |
+| Precision | **1.000** | **1.000** | — |
+| Compliance | **100%** | **100%** | — |
+| Input tokens | **37,992** | **236,075** | **83.9%** |
+| Total tokens | **44,271** | **259,060** | **82.9%** |
+| Cost (USD) | **$0.010** | **$0.049** | **80.8%** |
+| Wall-clock | **174s** | **500s** | **65.2%** |
+
+**Table 12: Separated Counterfactual — Retraction vs New Pair Discovery (10 edits)**
+
+| Condition | Invalid Pairs | Missing Pairs | Precision | Recall | F1 |
+|-----------|--------------|---------------|-----------|--------|-----|
+| (a) Full (apply_edits) | **0** | **0** | **1.000** | **0.959** | **0.979** |
+| (b) Retract-only | **0** | **100** | **1.000** | **0.880** | **0.936** |
+| (c) Neither | **240** | **100** | **0.812** | **0.880** | **0.845** |
+
+**Table 13: Full-Corpus Counterfactual (96K, 10 edits)**
+
+| Metric | With Retraction | Without Retraction |
+|--------|----------------|-------------------|
+| Invalid pairs | **0** | **620** |
+| Precision | **1.000** | **0.923** |
+| F1 | **1.000** | **0.945** |
+
+---
+
+### Cumulative Results Summary
+
+| Metric | Iter 18 | Iter 19 | Delta |
+|--------|---------|---------|-------|
+| Tests passing | 193 | **193+** | Gemini skip fix |
+| Full-corpus F1 (live API) | ❌ Missing | ✅ **1.0 (A), 1.0 (D)** | **TOP PRIORITY resolved** |
+| Token savings (live, 96K) | ❌ Missing | ✅ **83.9%** | End-to-end system proof |
+| Cost savings (live, 96K) | ❌ Missing | ✅ **80.8%** | 5.2× cheaper |
+| Separated counterfactual | ❌ Missing | ✅ **Retraction=68% of F1 protection** | Clean attribution |
+| Full-corpus counterfactual | ❌ Missing | ✅ **620 invalid pairs at 10 edits** | Scale validation |
+| Paper contributions | 9 | **11** | +2 (live full-corpus, separated ablation) |
 
