@@ -2,7 +2,7 @@
   "condition": "D_full_recompute_with_incremental_state",
   "version": 4,
   "task_idx": 1,
-  "model": "gpt-4o-mini",
+  "model": "gpt-4o",
   "num_chunks": 5,
   "max_chunk_chars": 19337,
   "context_type": "labeled_sequential",
@@ -26,10 +26,10 @@
       "tp": 1326,
       "fp": 0,
       "fn": 6675,
-      "input_tokens": 36980,
-      "output_tokens": 2615,
-      "elapsed_sec": 61.66,
-      "iteration_count": 9
+      "input_tokens": 4328,
+      "output_tokens": 720,
+      "elapsed_sec": 15.54,
+      "iteration_count": 2
     },
     {
       "chunk": 2,
@@ -44,10 +44,10 @@
       "tp": 3403,
       "fp": 0,
       "fn": 4598,
-      "input_tokens": 5341,
-      "output_tokens": 1262,
-      "elapsed_sec": 27.59,
-      "iteration_count": 2
+      "input_tokens": 2052,
+      "output_tokens": 775,
+      "elapsed_sec": 16.55,
+      "iteration_count": 1
     },
     {
       "chunk": 3,
@@ -62,10 +62,10 @@
       "tp": 4656,
       "fp": 0,
       "fn": 3345,
-      "input_tokens": 73307,
-      "output_tokens": 6335,
-      "elapsed_sec": 127.29,
-      "iteration_count": 9
+      "input_tokens": 2255,
+      "output_tokens": 988,
+      "elapsed_sec": 18.05,
+      "iteration_count": 1
     },
     {
       "chunk": 4,
@@ -80,10 +80,10 @@
       "tp": 5995,
       "fp": 0,
       "fn": 2006,
-      "input_tokens": 13794,
-      "output_tokens": 3013,
-      "elapsed_sec": 63.65,
-      "iteration_count": 3
+      "input_tokens": 2440,
+      "output_tokens": 1088,
+      "elapsed_sec": 16.05,
+      "iteration_count": 1
     },
     {
       "chunk": 5,
@@ -98,43 +98,43 @@
       "tp": 8001,
       "fp": 0,
       "fn": 0,
-      "input_tokens": 106653,
-      "output_tokens": 9760,
-      "elapsed_sec": 219.96,
-      "iteration_count": 9
+      "input_tokens": 7864,
+      "output_tokens": 1575,
+      "elapsed_sec": 27.06,
+      "iteration_count": 2
     }
   ],
   "final_f1": 1.0,
   "final_precision": 1.0,
   "final_recall": 1.0,
-  "total_input_tokens": 236075,
-  "total_output_tokens": 22985,
-  "total_wall_clock_sec": 500.16,
+  "total_input_tokens": 18939,
+  "total_output_tokens": 5146,
+  "total_wall_clock_sec": 93.25,
   "per_turn_tokens": [
     {
       "turn": 1,
-      "input": 36980,
-      "output": 2615
+      "input": 4328,
+      "output": 720
     },
     {
       "turn": 2,
-      "input": 5341,
-      "output": 1262
+      "input": 2052,
+      "output": 775
     },
     {
       "turn": 3,
-      "input": 73307,
-      "output": 6335
+      "input": 2255,
+      "output": 988
     },
     {
       "turn": 4,
-      "input": 13794,
-      "output": 3013
+      "input": 2440,
+      "output": 1088
     },
     {
       "turn": 5,
-      "input": 106653,
-      "output": 9760
+      "input": 7864,
+      "output": 1575
     }
   ]
 }
