@@ -240,6 +240,196 @@ def run_no_retraction_counterfactual(
 
 
 # ===========================================================================
+# 1b. Separated Counterfactual: Retraction-Only vs Neither
+# ===========================================================================
+
+
+def run_separated_counterfactual(
+    labeled_context: str,
+    task_idx: int = 1,
+    num_chunks: int = 4,
+    max_chunk_chars: int = 5000,
+    num_edits_list: list[int] | None = None,
+) -> list[dict]:
+    """Separated ablation: isolates precision (retraction) from recall (new pair discovery).
+
+    Three conditions:
+    (a) FULL: apply_edits() — retraction + re-evaluation + new pair discovery (correct behavior)
+    (b) RETRACT-ONLY: retraction + re-evaluation, but NO new pair discovery from upgrades
+        → Only precision degrades from missing new pairs; stale pairs still removed
+    (c) NEITHER: no retraction, no new pair discovery (current "without retraction" path)
+        → Both precision (stale pairs) and recall (missing new pairs) degrade
+
+    This cleanly attributes the F1 drop: how much is from stale pairs (precision impact
+    of retraction) vs missed upgrades (recall impact of new pair discovery)?
+    """
+    from rlm.core.incremental import IncrementalState
+
+    if num_edits_list is None:
+        num_edits_list = [5, 10]
+
+    qualifying_labels = TASK_QUALIFYING_LABELS[task_idx]
+    chunks = _make_sequential_chunks(labeled_context, num_chunks, max_chunk_chars)
+    total_context_chars = num_chunks * max_chunk_chars
+    context_window = labeled_context[:total_context_chars]
+
+    chunk_entities = []
+    for i, chunk in enumerate(chunks):
+        entities = find_entities_in_chunk(chunk, qualifying_labels)
+        chunk_entities.append(entities)
+
+    def check_pair(attrs1, attrs2):
+        q1 = attrs1.get("qualifying", False) if isinstance(attrs1, dict) else False
+        q2 = attrs2.get("qualifying", False) if isinstance(attrs2, dict) else False
+        return q1 and q2
+
+    results = []
+
+    for num_edits in num_edits_list:
+        print(f"\n{'=' * 70}")
+        print(f"SEPARATED COUNTERFACTUAL ABLATION: {num_edits} edits")
+        print(f"  Task {task_idx} | k={num_chunks}, {max_chunk_chars} chars/chunk")
+        print(f"{'=' * 70}")
+
+        edits = select_entities_to_edit(chunk_entities[0], num_edits, qualifying_labels)
+        num_downgrade = sum(1 for e in edits.values() if e.get("edit_type") == "downgrade")
+        num_upgrade = sum(1 for e in edits.values() if e.get("edit_type") == "upgrade")
+        print(f"  Edits: {len(edits)} ({num_downgrade} downgrade, {num_upgrade} upgrade)")
+
+        gold_post_edit = compute_gold_pairs_with_edits(context_window, qualifying_labels, edits)
+
+        def build_initial_state():
+            state = IncrementalState()
+            for ci in range(num_chunks):
+                chunk_ents = {uid: dict(attrs) for uid, attrs in chunk_entities[ci].items()}
+                state.process_chunk(ci, chunk_ents, pair_checker=check_pair,
+                                    monotone_attrs={"qualifying"})
+            return state
+
+        edit_attrs = {uid: {"labels": e["labels"], "qualifying": e["qualifying"]}
+                      for uid, e in edits.items()}
+
+        def count_invalid(state):
+            invalid = 0
+            for p in state.pair_tracker.get_pairs():
+                a1 = state.entity_cache.get(p[0])
+                a2 = state.entity_cache.get(p[1])
+                if not check_pair(a1, a2):
+                    invalid += 1
+            return invalid
+
+        def count_missing_new_pairs(state):
+            """Count pairs that SHOULD exist after upgrades but don't."""
+            missing = 0
+            all_ids = state.entity_cache.get_ids()
+            for uid, edit_data in edits.items():
+                if edit_data.get("edit_type") == "upgrade":
+                    updated_attrs = state.entity_cache.get(uid)
+                    for other_id in all_ids:
+                        if other_id == uid:
+                            continue
+                        other_attrs = state.entity_cache.get(other_id)
+                        if other_attrs and check_pair(updated_attrs, other_attrs):
+                            if not state.pair_tracker.has_pair(uid, other_id):
+                                missing += 1
+            return missing
+
+        # === (a) FULL: apply_edits() (retraction + new pair discovery) ===
+        incr_full = build_initial_state()
+        pairs_before = len(incr_full.pair_tracker)
+        incr_full.apply_edits(edit_attrs, pair_checker=check_pair, edit_chunk_index=99)
+        f1_full = compute_f1(list(incr_full.pair_tracker.get_pairs()), gold_post_edit)
+        invalid_full = count_invalid(incr_full)
+        missing_full = count_missing_new_pairs(incr_full)
+
+        # === (b) RETRACT-ONLY: retraction + re-evaluation, NO new pair discovery ===
+        incr_retract = build_initial_state()
+        # Manually do phases 1+2 of apply_edits, skip phase 3
+        all_retracted: set[tuple[str, str]] = set()
+        for eid, new_attrs in edit_attrs.items():
+            incr_retract.entity_cache.add(eid, new_attrs, chunk_index=99)
+            retracted = incr_retract.pair_tracker.retract_entity(eid)
+            all_retracted |= retracted
+        # Phase 2: re-evaluate retracted pairs
+        for p in all_retracted:
+            a1 = incr_retract.entity_cache.get(p[0])
+            a2 = incr_retract.entity_cache.get(p[1])
+            if a1 and a2 and check_pair(a1, a2):
+                incr_retract.pair_tracker.add_pair(p[0], p[1])
+        # Phase 3 SKIPPED — no new pair discovery
+        f1_retract = compute_f1(list(incr_retract.pair_tracker.get_pairs()), gold_post_edit)
+        invalid_retract = count_invalid(incr_retract)
+        missing_retract = count_missing_new_pairs(incr_retract)
+
+        # === (c) NEITHER: no retraction, no new pair discovery ===
+        incr_neither = build_initial_state()
+        for uid, edit_data in edits.items():
+            edit_attrs_clean = {"labels": edit_data["labels"], "qualifying": edit_data["qualifying"]}
+            incr_neither.entity_cache.add(uid, edit_attrs_clean, chunk_index=99)
+        f1_neither = compute_f1(list(incr_neither.pair_tracker.get_pairs()), gold_post_edit)
+        invalid_neither = count_invalid(incr_neither)
+        missing_neither = count_missing_new_pairs(incr_neither)
+
+        print(f"\n  | Metric              | (a) Full      | (b) Retract-only | (c) Neither    |")
+        print(f"  |---------------------|---------------|------------------|----------------|")
+        print(f"  | Invalid pairs       | {invalid_full:>13} | {invalid_retract:>16} | {invalid_neither:>14} |")
+        print(f"  | Missing new pairs   | {missing_full:>13} | {missing_retract:>16} | {missing_neither:>14} |")
+        print(f"  | Precision           | {f1_full['precision']:>13.4f} | {f1_retract['precision']:>16.4f} | {f1_neither['precision']:>14.4f} |")
+        print(f"  | Recall              | {f1_full['recall']:>13.4f} | {f1_retract['recall']:>16.4f} | {f1_neither['recall']:>14.4f} |")
+        print(f"  | F1                  | {f1_full['f1']:>13.4f} | {f1_retract['f1']:>16.4f} | {f1_neither['f1']:>14.4f} |")
+
+        # Attribution
+        f1_drop_total = f1_full["f1"] - f1_neither["f1"]
+        f1_drop_from_stale = f1_full["f1"] - f1_retract["f1"]  # retraction removes stale but misses new
+        f1_drop_from_missing = f1_retract["f1"] - f1_neither["f1"]  # difference is the stale pair impact
+
+        p_drop_total = f1_full["precision"] - f1_neither["precision"]
+        p_drop_from_stale = f1_neither["precision"] - f1_retract["precision"]  # stale pairs cause precision loss
+        # (b) has retraction so no stale pairs, but misses new pairs → recall loss
+        # (c) has stale pairs → precision loss AND misses new pairs → recall loss
+
+        print(f"\n  ATTRIBUTION:")
+        print(f"    F1 drop (full → neither): {f1_drop_total:+.4f}")
+        print(f"    F1 from missing new pairs (full → retract-only): {f1_drop_from_stale:+.4f}")
+        print(f"    F1 from stale pairs (retract-only → neither): {f1_drop_from_missing:+.4f}")
+        print(f"    Precision drop from stale pairs: {f1_retract['precision'] - f1_neither['precision']:+.4f}")
+        print(f"    Recall drop from missing new pairs: {f1_full['recall'] - f1_retract['recall']:+.4f}")
+
+        results.append({
+            "num_edits": num_edits,
+            "num_downgrade": num_downgrade,
+            "num_upgrade": num_upgrade,
+            "gold_post_edit": len(gold_post_edit),
+            "full": {
+                "pairs": len(incr_full.pair_tracker),
+                "invalid": invalid_full,
+                "missing_new": missing_full,
+                "precision": f1_full["precision"],
+                "recall": f1_full["recall"],
+                "f1": f1_full["f1"],
+            },
+            "retract_only": {
+                "pairs": len(incr_retract.pair_tracker),
+                "invalid": invalid_retract,
+                "missing_new": missing_retract,
+                "precision": f1_retract["precision"],
+                "recall": f1_retract["recall"],
+                "f1": f1_retract["f1"],
+            },
+            "neither": {
+                "pairs": len(incr_neither.pair_tracker),
+                "invalid": invalid_neither,
+                "missing_new": missing_neither,
+                "precision": f1_neither["precision"],
+                "recall": f1_neither["recall"],
+                "f1": f1_neither["f1"],
+            },
+        })
+
+    return results
+
+
+# ===========================================================================
 # 2. Full-Corpus Experiment Runner
 # ===========================================================================
 
@@ -266,7 +456,9 @@ def run_full_corpus_simulation(
     print(f"  Total context: {total_chars} chars")
     print(f"{'=' * 70}")
 
-    # Create chunks from full corpus
+    # Create chunks from full corpus via integer division.
+    # Note: the last chunk may be up to (num_chunks - 1) chars larger than others
+    # due to the remainder from integer division. At 96K/5 this is ~4 extra chars.
     chunks = [labeled_context[i * max_chunk_chars:(i + 1) * max_chunk_chars]
               for i in range(num_chunks)]
     # Include any remaining chars in last chunk
@@ -401,6 +593,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="Full-corpus + counterfactual experiments")
     parser.add_argument("--counterfactual", action="store_true", help="Run no-retraction counterfactual (25K)")
+    parser.add_argument("--separated-counterfactual", action="store_true",
+                        help="Run separated ablation: full vs retract-only vs neither")
     parser.add_argument("--full-corpus-counterfactual", action="store_true",
                         help="Run no-retraction counterfactual on full 96K corpus")
     parser.add_argument("--full-corpus", action="store_true", help="Run full-corpus A vs D simulation")
@@ -425,6 +619,17 @@ def main():
             num_edits_list=edit_counts,
         )
         out_path = output_dir / f"no_retraction_counterfactual_task{args.task}.json"
+        out_path.write_text(json.dumps(results, indent=2, default=str))
+        print(f"\nSaved to {out_path}")
+
+    if args.separated_counterfactual:
+        edit_counts = [int(x) for x in args.edits.split(",")]
+        results = run_separated_counterfactual(
+            labeled_context=labeled_context,
+            task_idx=args.task,
+            num_edits_list=edit_counts,
+        )
+        out_path = output_dir / f"separated_counterfactual_task{args.task}.json"
         out_path.write_text(json.dumps(results, indent=2, default=str))
         print(f"\nSaved to {out_path}")
 
@@ -524,8 +729,8 @@ def main():
         print(f"  | Input Tokens  | {ta:>15,} | {td:>17,} |")
         print(f"  | Token Savings | {savings:>14.1%}  | {'baseline':>17} |")
 
-    if not (args.counterfactual or args.full_corpus_counterfactual or args.full_corpus or args.full_corpus_live):
-        print("No experiment selected. Use --counterfactual, --full-corpus-counterfactual, --full-corpus, or --full-corpus-live")
+    if not (args.counterfactual or args.separated_counterfactual or args.full_corpus_counterfactual or args.full_corpus or args.full_corpus_live):
+        print("No experiment selected. Use --counterfactual, --separated-counterfactual, --full-corpus-counterfactual, --full-corpus, or --full-corpus-live")
 
 
 if __name__ == "__main__":
