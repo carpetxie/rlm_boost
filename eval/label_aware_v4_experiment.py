@@ -183,6 +183,7 @@ def run_condition_a_v4(
     model: str = "gpt-4o-mini",
     verbose: bool = False,
     run_id: int = 1,
+    temperature: float | None = None,
 ) -> dict:
     """
     Condition A V4 (Library-Level Monotone Fix): Incremental RLM.
@@ -230,9 +231,12 @@ def run_condition_a_v4(
         )
         print(f"  Chunk {i}: {label_count} labeled records, {qual_hits} qualifying-label instances")
 
+    backend_kw: dict = {"model_name": model}
+    if temperature is not None:
+        backend_kw["temperature"] = temperature
     rlm = RLM(
         backend="openai",
-        backend_kwargs={"model_name": model},
+        backend_kwargs=backend_kw,
         environment="local",
         environment_kwargs={"setup_code": checker_setup},
         persistent=True,
