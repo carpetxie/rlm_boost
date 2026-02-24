@@ -541,6 +541,15 @@ class IncrementalState:
         3. Re-evaluating retracted pairs with updated attributes
         4. Discovering new pairs created by the attribute change
 
+        Complexity:
+            Phase 1 (update + retract): O(E × P_avg) where E = len(edits) and
+                P_avg = avg pairs per entity.
+            Phase 2 (re-evaluate retracted): O(R) where R = total retracted pairs.
+            Phase 3 (new pair discovery): O(E × N) where N = total entities.
+                For small edit batches (E < 20), this is negligible. For bulk edits
+                (E > 100), consider batching or using process_chunk() with a
+                synthetic edit chunk instead.
+
         Args:
             edits: {entity_id: new_attributes} for entities to modify
             pair_checker: Optional callable(attrs1, attrs2) -> bool
