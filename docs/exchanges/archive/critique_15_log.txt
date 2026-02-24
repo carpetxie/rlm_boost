@@ -1,0 +1,31 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary:
+
+## Critique 15 — Key Points
+
+**STATUS: CONTINUE**
+
+### Scores
+| Criterion | Score | Delta |
+|-----------|-------|-------|
+| Novelty | 7.5/10 | -0.5 |
+| Technical Soundness | 8.0/10 | -0.5 |
+| Benchmark Performance | 8.5/10 | +0 |
+| Scalability | 6.0/10 | -0.5 |
+| Research Maturity | 7.5/10 | -0.5 |
+
+### The One Big Thing
+**Implement `verify_lossless()` and `memory_usage()` on IncrementalState — then run them.** 2 hours of code, $0 API cost. This closes the two most dangerous external reviewer objections.
+
+### External Reviewer Concerns
+1. **"Caching is lossy"** — ❌ NOT ADDRESSED. The research log documents the concern and lists required experiments, but none have been implemented. This is the #1 gap.
+2. **"Memory will blow up"** — ❌ NOT ADDRESSED. Zero memory profiling code exists in the codebase.
+3. **"Only one benchmark"** — ⚠️ PARTIALLY addressed implicitly. Needs an explicit 2-paragraph problem class characterization for the paper.
+
+### 3rd-Party Clarity
+Table 16 passes cleanly. Cross-model savings framing needs a "Pair-Check Savings" column to preempt "savings disappear on better models." All other tables pass.
+
+### Top 4 Experiments
+1. Losslessness verification ($0, 1.5 hrs) — with concrete code provided
+2. Memory profiling ($0, 30 min) — with concrete code provided  
+3. Problem class characterization ($0, 1 hr writing)
+4. Pair-check savings column in Table 16 ($0, 15 min)

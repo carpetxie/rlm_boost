@@ -4184,3 +4184,45 @@ temperature; at temperature=0, the system is fully deterministic with F1=1.0."
 | Paper contributions | 13 | **14** | +1 (cross-model) |
 | Total API spend (est.) | ~$0.50 | ~$0.70 | +$0.20 |
 
+---
+
+## NEXT CYCLE PRIORITIES — Iteration 22+ (External Reviewer Concerns)
+
+**Context**: External reviewer (Neil Bhavikatti) raised three concerns after reviewing the architecture. These must be addressed with running code and real measurements.
+
+### Priority 1: LOSSLESS PROOF — "Caching is lossy compression" concern
+
+**The concern**: "When you cache entity classifications and pair results, you're doing lossy compression. How do you know the cache doesn't silently drop information?"
+
+**The reality**: The REPL state (EntityCache, PairTracker) stores the COMPLETE set of entities and their attributes — it's lossless by construction. The *message history* is pruned (lossy), but the *computation state* is not. However, we haven't explicitly proven this.
+
+**Required experiments**:
+1. Run the incremental pipeline with **aggressive history pruning** (e.g., keep only last 2 messages) and show P=1.0 and F1 are preserved. This proves correctness comes from REPL state, not message history.
+2. At each turn, dump `entity_cache.entities` and compare against the union of all entities seen so far. Show they are identical (no entity loss).
+3. Add a `--verify-lossless` flag that, after each turn, verifies `len(entity_cache.entities) == len(all_entities_seen_so_far)` and `set(pair_tracker.valid_pairs) ⊆ set(all_possible_valid_pairs)`. Run with this flag and show zero verification failures.
+
+### Priority 2: MEMORY SCALING — "Can't store too much info" concern
+
+**The concern**: "If you're caching everything, memory will blow up. At some point you can't store the full entity cache."
+
+**The reality**: Memory is O(n + p) where n = entities, p = valid pairs. For OOLONG Task 1 (n=231 entities, p=8001 pairs), this is trivially small. But we need to prove it scales.
+
+**Required experiments**:
+1. **Profile actual memory** at each turn: `sys.getsizeof()` or `tracemalloc` on EntityCache, PairTracker, IncrementalState. Report in bytes/KB/MB.
+2. **Extrapolate**: Given measured memory at n=231, project to n=1K, 10K, 100K entities. At what point does memory become a concern? (Hypothesis: not until millions of entities, well beyond typical LLM context.)
+3. **Compare memory vs context**: Show that the REPL state memory is negligible compared to the LLM context window size. E.g., "Entity cache uses 50KB; a single LLM prompt uses 100K tokens ≈ 400KB."
+
+### Priority 3: CROSS-BENCHMARK — "Only tested on one benchmark" concern
+
+**The concern**: "All results are on OOLONG-Pairs. Does this generalize?"
+
+**Required experiments**:
+1. Analyze the structural properties of OOLONG-Pairs that make incremental computation effective (monotone predicates, entity-pair structure, chunked context). Identify which other benchmarks share these properties.
+2. If S-NIAH or another benchmark can be adapted to a streaming/incremental setting, run a proof-of-concept. Even a partial result on a second benchmark significantly strengthens generalizability.
+3. If no suitable benchmark exists, clearly characterize the *class of problems* where incremental computation applies (entity matching with monotone predicates) and argue this is a broad, practically important class.
+
+### Priority 4: ROBUSTNESS HARDENING
+
+1. **Retraction stochasticity deep-dive**: The temperature=0 ablation showed σ_F1=0 but at 3.7× token cost. Can we reduce spurious retractions at default temperature without going to temp=0? (e.g., entity fingerprinting, attribute normalization, confidence thresholds)
+2. **Edge case testing**: What happens with 0 qualifying entities in a chunk? With all entities qualifying? With duplicate entities across chunks?
+

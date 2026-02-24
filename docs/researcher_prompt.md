@@ -75,6 +75,18 @@ The single most important missing piece in this research is a **direct compariso
 
 **Why this matters**: The current experiments compare incremental vs single-turn oracle, which answers "does chunking lose quality?" That's a secondary question. The primary question is: "given that data arrives in chunks, is incremental processing more efficient than reprocessing everything?" The naive RLM baseline answers this directly.
 
+## MANDATORY: Address External Reviewer Concerns
+
+An external reviewer raised three concerns that must be addressed with running code and real data:
+
+1. **"Caching is lossy compression"**: Prove the REPL state is LOSSLESS. The EntityCache stores every entity ever seen; PairTracker stores every valid pair. Message history is pruned, but computation state is not. Required: run with aggressive history pruning (keep 2 messages) and show P=1.0. Add a `--verify-lossless` mode that asserts `len(entity_cache) == len(all_entities_seen)` at each turn.
+
+2. **"Memory will blow up"**: Profile actual memory. Use `tracemalloc` or `sys.getsizeof()` on EntityCache, PairTracker, IncrementalState at each turn. Report in bytes. Extrapolate to n=1K/10K/100K entities. Compare REPL state memory vs LLM context size (tokens × ~4 bytes). Show memory is negligible.
+
+3. **"Only one benchmark"**: Characterize the *class* of problems where incremental computation applies. If a second benchmark (S-NIAH, or another entity-matching task) can be adapted to incremental streaming, run it. Even a partial result counts.
+
+Read the "NEXT CYCLE PRIORITIES" section in docs/research_log.md for detailed experiment specifications.
+
 ## Iteration Pacing
 
 You are running a fixed number of iterations. Pace your work accordingly:

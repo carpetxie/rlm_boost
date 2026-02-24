@@ -48,6 +48,18 @@ If the answer is no for ANY experiment, flag it as a **blocking issue**. Specifi
 |----------|-------------|-------|-------------|--------|------|-----|------|
 | Naive RLM (full recompute each turn) | same | same | X | X | X | X | X |
 | Incremental RLM | same | same | Y | Y | Y | Y | Y |
+
+## EXTERNAL REVIEWER CONCERNS (MANDATORY CHECK)
+
+An external reviewer raised three specific concerns. Each iteration, check whether these have been addressed with running code and real measurements:
+
+1. **"Caching is lossy compression"** — Has the researcher proven that the REPL state (EntityCache, PairTracker) is lossless? Is there an experiment showing that aggressive history pruning still yields P=1.0? Is there a verification mode that checks no entities are dropped?
+
+2. **"Memory will blow up"** — Has the researcher profiled actual memory usage (bytes/KB/MB) of the EntityCache and PairTracker? Is there a scaling projection to n=1K/10K/100K entities? Is there a comparison of REPL state memory vs LLM context size?
+
+3. **"Only one benchmark"** — Has the researcher characterized what class of problems the incremental approach applies to? Is there any evidence (even partial) on a second benchmark or task family? If not, is the scope boundary clearly argued?
+
+If any of these remain unaddressed, flag them as **high-priority items**.
 | Oracle (single-turn, full context) | same | 1 | Z | Z | Z | Z | Z |
 
 If this table doesn't exist with real numbers from real API runs, the research is incomplete.
