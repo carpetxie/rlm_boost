@@ -1,0 +1,72 @@
+{
+  "task": 3,
+  "k": 5,
+  "num_runs": 1,
+  "model": "gpt-4o-mini",
+  "gold_pairs_count": 10440,
+  "total_context_chars": 96689,
+  "runs": [
+    {
+      "run": 1,
+      "f1": 0.9931,
+      "precision": 1.0,
+      "recall": 0.9862,
+      "total_input_tokens": 51132,
+      "total_output_tokens": 7672,
+      "compliance_rate": 1.0,
+      "wall_clock_sec": 181.15,
+      "total_wall_sec": 181.22
+    }
+  ],
+  "aggregate": {
+    "f1": {
+      "mean": 0.9931,
+      "std": 0.0,
+      "min": 0.9931,
+      "max": 0.9931
+    },
+    "precision": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "recall": {
+      "mean": 0.9862,
+      "std": 0.0,
+      "min": 0.9862,
+      "max": 0.9862
+    },
+    "compliance_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "total_input_tokens": {
+      "mean": 51132,
+      "std": 0.0,
+      "min": 51132,
+      "max": 51132
+    },
+    "total_output_tokens": {
+      "mean": 7672,
+      "std": 0.0,
+      "min": 7672,
+      "max": 7672
+    },
+    "wall_clock_sec": {
+      "mean": 181.15,
+      "std": 0.0,
+      "min": 181.15,
+      "max": 181.15
+    }
+  },
+  "condition_d": {
+    "final_f1": 0.9931,
+    "total_input_tokens": 179033,
+    "total_output_tokens": 20713,
+    "compliance_rate": 0,
+    "wall_clock_sec": 483.0
+  }
+}
