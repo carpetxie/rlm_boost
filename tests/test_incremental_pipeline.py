@@ -1116,3 +1116,84 @@ class TestMemoryUsage:
         assert "total_mb" in mem
         assert "component_breakdown" in mem
         assert "counts" in mem
+
+
+class TestRebuildPairs:
+    """Tests for rebuild_pairs() — two-tier architecture proof."""
+
+    def test_rebuild_matches_original(self):
+        """Rebuilt pairs from entity cache should match incremental pairs."""
+        state = IncrementalState()
+
+        def score_match(a, b):
+            return a.get("score", 0) > 5 and b.get("score", 0) > 5
+
+        state.process_chunk(0, {
+            "u1": {"score": 10},
+            "u2": {"score": 8},
+            "u3": {"score": 3},
+        }, pair_checker=score_match)
+
+        # u1-u2 should match (both > 5), u3 doesn't qualify
+        assert len(state.pair_tracker) == 1
+
+        result = state.rebuild_pairs(pair_checker=score_match)
+        assert result["match"] is True
+        assert result["original_count"] == 1
+        assert result["rebuilt_count"] == 1
+        assert result["missing_pairs"] == 0
+        assert result["extra_pairs"] == 0
+
+    def test_rebuild_after_multiple_chunks(self):
+        """Rebuild should work correctly after multi-chunk processing."""
+        state = IncrementalState()
+
+        def always_match(a, b):
+            return True
+
+        state.process_chunk(0, {"u1": {"x": 1}, "u2": {"x": 2}}, pair_checker=always_match)
+        state.process_chunk(1, {"u3": {"x": 3}}, pair_checker=always_match)
+
+        # 3 entities → C(3,2) = 3 pairs
+        assert len(state.pair_tracker) == 3
+
+        result = state.rebuild_pairs(pair_checker=always_match)
+        assert result["match"] is True
+        assert result["rebuilt_count"] == 3
+        assert result["rebuild_checks"] == 3  # C(3,2) = 3
+
+    def test_rebuild_after_retraction(self):
+        """Rebuild should produce correct pairs even after retractions."""
+        state = IncrementalState()
+
+        call_count = [0]
+
+        def match_if_both_qualifying(a, b):
+            call_count[0] += 1
+            return a.get("qualifying", False) and b.get("qualifying", False)
+
+        # Chunk 0: both qualifying → 1 pair
+        state.process_chunk(0, {
+            "u1": {"qualifying": True},
+            "u2": {"qualifying": True},
+        }, pair_checker=match_if_both_qualifying)
+        assert len(state.pair_tracker) == 1
+
+        # Chunk 1: u1 now non-qualifying → retraction
+        state.process_chunk(1, {
+            "u1": {"qualifying": False},
+        }, pair_checker=match_if_both_qualifying)
+        assert len(state.pair_tracker) == 0
+
+        result = state.rebuild_pairs(pair_checker=match_if_both_qualifying)
+        assert result["match"] is True
+        assert result["rebuilt_count"] == 0
+
+    def test_rebuild_empty_state(self):
+        """Rebuild on empty state should return zero pairs."""
+        state = IncrementalState()
+        result = state.rebuild_pairs(pair_checker=lambda a, b: True)
+        assert result["match"] is True
+        assert result["original_count"] == 0
+        assert result["rebuilt_count"] == 0
+        assert result["rebuild_checks"] == 0
