@@ -89,54 +89,22 @@ The following entities need to be UPDATED (their qualifying status may have chan
 
 {edit_description}
 
-Run this code to apply the edits:
+Run this code to apply the edits using the apply_edits() API:
 
 ```repl
-# Dynamic context update: modify entities and retract affected pairs
+# Dynamic context update: use the library-level apply_edits() method
 edits = {edits_dict_repr}
 
-total_retracted = 0
-total_new_pairs = 0
-for uid, new_attrs in edits.items():
-    # Update entity in cache
-    old_attrs = _incremental.entity_cache.get(uid)
-    old_qualifying = old_attrs.get("qualifying", False) if old_attrs else False
-
-    # Apply the edit
-    _incremental.entity_cache.add(uid, new_attrs, chunk_index={edit_chunk_idx})
-
-    # Retract all pairs involving this entity (they need re-evaluation)
-    retracted = _incremental.pair_tracker.retract_entity(uid)
-    total_retracted += len(retracted)
-
-    # Re-evaluate retracted pairs with updated attributes
-    updated_attrs = _incremental.entity_cache.get(uid)
-    for p in retracted:
-        partner_id = p[1] if p[0] == uid else p[0]
-        partner_attrs = _incremental.entity_cache.get(partner_id)
-        if partner_attrs and check_pair(updated_attrs, partner_attrs):
-            _incremental.pair_tracker.add_pair(uid, partner_id)
-            total_new_pairs += 1
-
-    # Also check for NEW pairs with all existing entities
-    all_ids = _incremental.entity_cache.get_ids()
-    for other_id in all_ids:
-        if other_id == uid:
-            continue
-        other_attrs = _incremental.entity_cache.get(other_id)
-        if other_attrs and check_pair(updated_attrs, other_attrs):
-            _incremental.pair_tracker.add_pair(uid, other_id)
-
-    new_qualifying = new_attrs.get("qualifying", False)
-    print(f"  Entity {{uid}}: qualifying {{old_qualifying}} -> {{new_qualifying}}, retracted {{len(retracted)}} pairs")
+edit_stats = _incremental.apply_edits(edits, pair_checker=check_pair, edit_chunk_index={edit_chunk_idx})
 
 pair_results = list(_incremental.pair_tracker.get_pairs())
-print(f"Edit complete: {{total_retracted}} pairs retracted, {{len(pair_results)}} pairs now valid")
+print(f"Edit complete: {{edit_stats['total_retracted']}} pairs retracted, {{edit_stats['pairs_readded']}} re-added, {{edit_stats['new_pairs_from_edits']}} new")
+print(f"Pairs: {{edit_stats['pairs_before']}} -> {{edit_stats['pairs_after']}}")
 print(f"Stats: {{_incremental.get_stats()}}")
 ```
 
 IMPORTANT: Run the code block above EXACTLY. This applies the entity edits and
-correctly retracts/re-evaluates affected pairs.
+correctly retracts/re-evaluates affected pairs via the library API.
 
 After the repl block runs successfully, return FINAL_VAR(pair_results).
 """
