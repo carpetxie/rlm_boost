@@ -1197,3 +1197,145 @@ class TestRebuildPairs:
         assert result["original_count"] == 0
         assert result["rebuilt_count"] == 0
         assert result["rebuild_checks"] == 0
+
+
+# =============================================================================
+# reset() correctness tests (Iteration 17 — verify _processed_chunk_indices cleared)
+# =============================================================================
+
+
+class TestResetClearsProcessedChunks:
+    """Verify reset() clears _processed_chunk_indices so chunks can be re-processed."""
+
+    def test_reset_allows_reprocessing(self):
+        """After reset(), process_chunk() with the same index runs fresh (not cached)."""
+        state = IncrementalState()
+
+        def checker(a, b):
+            return a.get("type") == b.get("type")
+
+        # First processing
+        stats1 = state.process_chunk(0, {"u1": {"type": "A"}, "u2": {"type": "A"}}, checker)
+        assert stats1["new_entities"] == 2
+        assert stats1["total_pairs"] == 1
+
+        # Reset
+        state.reset()
+        assert len(state.entity_cache) == 0
+        assert len(state.pair_tracker) == 0
+        assert len(state.chunk_log) == 0
+        assert len(state._processed_chunk_indices) == 0
+
+        # Re-process same chunk index — should work fresh, no warning
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            stats2 = state.process_chunk(0, {"u3": {"type": "B"}}, checker)
+            # No warnings should fire (chunk is processed fresh)
+            chunk_warnings = [x for x in w if "called more than once" in str(x.message)]
+            assert len(chunk_warnings) == 0
+
+        # Fresh processing with different entities
+        assert stats2["new_entities"] == 1
+        assert stats2["total_pairs"] == 0  # only one entity
+
+    def test_reset_clears_all_counters(self):
+        """reset() zeroes out all cumulative counters."""
+        state = IncrementalState()
+
+        def checker(a, b):
+            return True
+
+        state.process_chunk(0, {"u1": {}, "u2": {}}, checker)
+        state.process_chunk(1, {"u1": {"updated": True}}, checker)
+
+        # Should have accumulated stats
+        pre = state.get_stats()
+        assert pre["total_entities"] > 0
+        assert pre["chunks_processed"] > 0
+
+        state.reset()
+        post = state.get_stats()
+        assert post["total_entities"] == 0
+        assert post["total_pairs"] == 0
+        assert post["total_pair_checks"] == 0
+        assert post["total_retractions"] == 0
+        assert post["noop_retractions"] == 0
+        assert post["permanent_retractions"] == 0
+        assert post["chunks_processed"] == 0
+
+
+# =============================================================================
+# apply_edits(merge=True) tests (Iteration 17)
+# =============================================================================
+
+
+class TestApplyEditsMerge:
+    """Tests for the merge parameter of apply_edits()."""
+
+    def test_merge_preserves_unedited_attributes(self):
+        """With merge=True, attributes not in the edit are preserved."""
+        state = IncrementalState()
+
+        def checker(a, b):
+            return a.get("qualifying") and b.get("qualifying")
+
+        state.process_chunk(0, {
+            "u1": {"qualifying": True, "name": "Alice", "score": 95},
+            "u2": {"qualifying": True, "name": "Bob", "score": 90},
+        }, pair_checker=checker)
+        assert len(state.pair_tracker) == 1
+
+        # Edit only the score, keeping qualifying and name
+        state.apply_edits(
+            {"u1": {"score": 50}},
+            pair_checker=checker,
+            merge=True,
+        )
+        attrs = state.entity_cache.get("u1")
+        assert attrs["qualifying"] is True  # preserved
+        assert attrs["name"] == "Alice"  # preserved
+        assert attrs["score"] == 50  # updated
+        # Pair should still exist (qualifying unchanged)
+        assert len(state.pair_tracker) == 1
+
+    def test_no_merge_replaces_all_attributes(self):
+        """Without merge (default), only the edit attributes survive."""
+        state = IncrementalState()
+
+        def checker(a, b):
+            return a.get("qualifying") and b.get("qualifying")
+
+        state.process_chunk(0, {
+            "u1": {"qualifying": True, "name": "Alice"},
+            "u2": {"qualifying": True, "name": "Bob"},
+        }, pair_checker=checker)
+
+        # Edit without merge — only score survives
+        state.apply_edits(
+            {"u1": {"score": 50}},
+            pair_checker=checker,
+            merge=False,
+        )
+        attrs = state.entity_cache.get("u1")
+        assert attrs.get("qualifying") is None  # lost!
+        assert attrs.get("name") is None  # lost!
+        assert attrs["score"] == 50
+
+    def test_merge_overwrites_edited_attributes(self):
+        """With merge=True, attributes IN the edit overwrite the cached values."""
+        state = IncrementalState()
+
+        state.process_chunk(0, {
+            "u1": {"qualifying": True, "name": "Alice"},
+        }, pair_checker=None)
+
+        state.apply_edits(
+            {"u1": {"qualifying": False, "extra": "data"}},
+            merge=True,
+        )
+        attrs = state.entity_cache.get("u1")
+        assert attrs["qualifying"] is False  # overwritten
+        assert attrs["name"] == "Alice"  # preserved
+        assert attrs["extra"] == "data"  # new attribute added
