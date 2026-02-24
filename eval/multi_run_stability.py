@@ -75,6 +75,15 @@ def main():
         help="Temperature for LLM calls (default: model default)"
     )
     parser.add_argument("--verbose", action="store_true", help="Verbose RLM output")
+    parser.add_argument(
+        "--history-strategy", default=None,
+        choices=["sliding_window", "summarize", "token_budget"],
+        help="Override history pruning strategy (for aggressive pruning experiments)"
+    )
+    parser.add_argument(
+        "--history-window", type=int, default=None,
+        help="Max recent iterations to keep in history (default: 2 for sliding_window)"
+    )
     args = parser.parse_args()
 
     # Validate task
@@ -128,6 +137,8 @@ def main():
             verbose=args.verbose,
             run_id=i,
             temperature=args.temperature,
+            history_strategy=args.history_strategy,
+            history_window=args.history_window,
         )
         wall_total = time.time() - t0
 
