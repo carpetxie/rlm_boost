@@ -1,0 +1,42 @@
+Here's a summary of what was accomplished in Iteration 18:
+
+## Iteration 18 Summary
+
+### Three High-Impact Deliverables
+
+**1. Full-Corpus A vs D Simulation (Critique #1 — HIGHEST priority)**
+- Ran incremental (A) vs full-recompute (D) on the **full 96K-char corpus** (previously only 25K)
+- Results across 3 tasks:
+
+| Task | F1(A) | F1(D) | Check Savings |
+|------|-------|-------|---------------|
+| 1 | **1.000** | **1.000** | **64.2%** |
+| 3 | **0.993** | **0.993** | **64.1%** |
+| 6 | **0.993** | **0.993** | **64.6%** |
+
+This **resolves the F1=0.32 presentation problem** — the paper can now report F1 ≈ 1.0 with 64% savings instead of F1=0.32 with 77% savings.
+
+**2. No-Retraction Counterfactual (Critique #2 — zero cost)**
+- Quantifies what happens WITHOUT retraction after entity edits:
+
+| Metric | 5 Edits (With/Without) | 10 Edits (With/Without) |
+|--------|------------------------|-------------------------|
+| Invalid pairs | 0 / **99** | 0 / **240** |
+| Precision | **1.0** / 0.922 | **1.0** / 0.812 |
+
+This proves retraction is **essential, not optional** — without it, precision drops to 0.81.
+
+**3. `apply_edits()` API on IncrementalState (Critique #3)**
+- 80-line first-class method for dynamic context updates
+- 5 unit tests (all passing, 193 total)
+- Makes the "framework handles edits" claim architecturally honest
+
+### Code Changes
+- `rlm/core/incremental.py` — new `apply_edits()` method
+- `tests/test_incremental_pipeline.py` — 5 new tests (TestApplyEdits class)
+- `eval/full_corpus_and_counterfactual.py` — new experiment runner
+- `eval/dynamic_context_experiment.py` — sorted dict iteration fix
+
+### Files Updated
+- `docs/research_log.md` — Experiments 47-48, Tables 9-10
+- `docs/exchanges/researcher_response.md` — full deliberation
