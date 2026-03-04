@@ -4,6 +4,9 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+pytest.importorskip("google.genai", reason="google-genai not installed")
+
 from dotenv import load_dotenv
 
 from rlm.clients.gemini import GeminiClient

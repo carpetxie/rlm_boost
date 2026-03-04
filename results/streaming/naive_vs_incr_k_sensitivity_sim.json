@@ -1,0 +1,46 @@
+{
+  "3": {
+    "k": 3,
+    "naive_all_checks": 11696,
+    "incr_checks": 7038,
+    "check_savings_all": 39.83,
+    "naive_tokens": 49998,
+    "incr_tokens": 24999,
+    "token_savings": 50.0,
+    "final_naive": 1653,
+    "final_incr": 1596
+  },
+  "5": {
+    "k": 5,
+    "naive_all_checks": 17513,
+    "incr_checks": 7276,
+    "check_savings_all": 58.45,
+    "naive_tokens": 75000,
+    "incr_tokens": 25000,
+    "token_savings": 66.67,
+    "final_naive": 1653,
+    "final_incr": 1540
+  },
+  "7": {
+    "k": 7,
+    "naive_all_checks": 22902,
+    "incr_checks": 7264,
+    "check_savings_all": 68.28,
+    "naive_tokens": 99988,
+    "incr_tokens": 24997,
+    "token_savings": 75.0,
+    "final_naive": 1653,
+    "final_incr": 1653
+  },
+  "10": {
+    "k": 10,
+    "naive_all_checks": 31550,
+    "incr_checks": 7055,
+    "check_savings_all": 77.64,
+    "naive_tokens": 137500,
+    "incr_tokens": 25000,
+    "token_savings": 81.82,
+    "final_naive": 1653,
+    "final_incr": 1431
+  }
+}

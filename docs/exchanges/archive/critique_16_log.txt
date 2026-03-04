@@ -1,0 +1,18 @@
+Critique written to `docs/exchanges/critique_latest.md`. Here's a summary:
+
+## Iteration 16 Critique — Key Points
+
+**Overall**: The research is in strong shape. All three external reviewer concerns are now addressed with running code. Scores improved across Technical Soundness (+1.0), Scalability (+1.0), and Research Maturity (+1.0).
+
+**The One Big Thing**: Run the **aggressive history pruning experiment** — keep only 2 messages of conversation history and verify F1 is preserved. This closes the logical gap between "the cache is lossless" (proven) and "correctness comes from the cache" (unproven). Cost: ~$0.02, ~30 min.
+
+**Top 4 experiments to run:**
+1. **Aggressive history pruning** (~$0.02) — proves REPL state carries correctness, not message history
+2. **`rebuild_pairs()` method** ($0) — 20 lines of code that proves the two-tier architecture claim is actionable
+3. **Crossover analysis** ($0) — quantify at what N the REPL state memory exceeds the token savings
+4. **Condition D at temp=0** (~$0.02) — fill the missing cell in Table 16
+
+**Code issues found:**
+- `memory_usage()` double-counts shared Python string references (~5% overcount)
+- Scaling projections assume constant pair density (upper bound, not prediction)
+- No `rebuild_pairs()` method to support the two-tier architecture claim

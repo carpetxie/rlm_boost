@@ -1,19 +1,13 @@
-The critique for Iteration 10 has been written to `docs/exchanges/critique_latest.md`. Here's a concise summary of the key points:
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
 
----
+**Overall**: The research is strong and approaching submission quality. F1=0.979±0.019 with 71-91% token savings across 3 tasks, P=1.0 invariant, and honest multi-run reporting.
 
-## Iteration 10 Critique — Key Takeaways
+**Scores**: Novelty 8/10 (+0.5), Technical Soundness 8.5/10 (+0), Benchmark Performance 8.5/10 (+2.0 — biggest jump from resolving the F1=0.32 problem), Scalability 6.5/10 (+0.5), Research Maturity 8/10 (+0.5).
 
-### The One Big Thing
-**Label-aware `check_pair` — re-run all three conditions (A/B/C).** The entire comparison table (A=0.51, B=0.20, C=0.55) is measured under a proxy condition (`>= 1 instance`) rather than Task 1's actual condition (`numeric_value OR location`). This is ~15 lines of code, ~$5, and determines whether the paper's central claim applies to the real task or just the proxy.
+**The One Big Thing**: **Run the cross-model validation** ($0.50, 30 min). This has been deferred 5+ iterations. All higher-priority items are resolved. A single gpt-4o run would address the most obvious reviewer objection ("is P=1.0 architecture-level or model-specific?").
 
-### New Issues Found (not previously raised)
-
-1. **Pruning telemetry is lying.** The `f1_progression_results_iter9.json` token data *proves* pruning fired between turns 2→3 (tokens dropped 9,626→3,845, which is impossible without history compression), yet `prune_count=0` for all turns. The Iteration 9 attribute fix was likely applied to the code but not to the run that generated the results file. Must be verified with a direct `._prune_count` print on the next API run.
-
-2. **Condition B token anomaly (3.4× unexplained cost).** Condition B uses 21,934 input tokens for 5K chars; Condition A Turn 1 uses 6,401 for the same 5K chars. The hypothesis is that Condition B runs all 6 max_iterations while Condition A terminates early (~2 iterations). This needs to be confirmed with iteration-count logging — and if true, it's a publishable finding about protocol efficiency.
-
-3. **`_extract_assigned_names` nested-scope bug.** `ast.walk(tree)` descends into function bodies, so variables assigned inside model-written helper functions appear as module-scope variables in pruned history summaries. Fix: use `tree.body` iteration instead.
-
-### Architectural Finding to Publish
-The token data reveals that **pruning fires yet compliance holds (100%)** — because the deduplication guard operates on REPL Python state, not message history. This is a publishable architectural insight: REPL-persistent state decouples computational correctness from conversational context. History can be aggressively pruned without risking correctness. This should be stated explicitly in the paper.
+**Key findings**:
+- All experiments pass the 3rd-party clarity test — no blocking issues
+- Retraction stochasticity is an underemphasized finding that could itself be a paper contribution
+- One minor code issue: `apply_edits()` Phase 3 lacks deduplication for edited×edited pairs (3-line fix)
+- No temperature control in headline experiments — should be documented and ablated

@@ -190,6 +190,16 @@ Your three priorities are NOVELTY, ROBUSTNESS, and STRENGTH OF CLAIM:
 - ROBUSTNESS: Are benchmarks testing the right things? Are there failure modes? Review actual code for correctness.
 - STRENGTH: Are results as strong as evidence allows? Push for precise quantification.
 
+MANDATORY: Apply the 3rd-Party Clarity Test to EVERY experiment. For each comparison, ask: would a skeptical engineer who has never seen this project instantly understand what's being compared, why the comparison is fair, and why the result matters? Flag any ambiguous or strawman comparisons as blocking issues.
+
+CRITICAL CHECK: Does a head-to-head comparison of Incremental RLM vs Naive RLM (full recompute each turn) exist with real API numbers? If not, this is the #1 priority. Read the CRITICAL GAP section at the top of docs/research_log.md.
+
+EXTERNAL REVIEWER CONCERNS (MANDATORY): An external reviewer raised three concerns that must be checked each iteration:
+1. 'Caching is lossy compression' — Has losslessness been PROVEN with experiments (not just argued)?
+2. 'Memory will blow up' — Has actual memory been PROFILED in bytes/KB/MB with scaling projections?
+3. 'Only one benchmark' — Is there evidence on a second benchmark, or at least a rigorous characterization of the applicable problem class?
+Read the EXTERNAL REVIEWER CONCERNS section in docs/critique_prompt.md and the NEXT CYCLE PRIORITIES in docs/research_log.md.
+
 Write your critique to docs/exchanges/critique_latest.md. Use iteration number $i.
 
 IMPORTANT: Do NOT set STATUS: ACCEPT. Always find concrete improvements — architectural changes, new experiments, robustness checks, code fixes. Be constructive but relentless."
@@ -257,10 +267,22 @@ IMPORTANT: Do NOT set STATUS: ACCEPT. Always find concrete improvements — arch
 
 This is iteration $i of a maximum $MAX_ITERATIONS. Read the critique at docs/exchanges/critique_latest.md.
 
+ITERATION PACING: You are on iteration $i of $MAX_ITERATIONS.
+- If $i <= $(( MAX_ITERATIONS * 7 / 10 )): You are in EXPLORATION phase. Fix bugs, push new directions, address critique holes, run small/cheap experiments. Build infrastructure for the full experiment.
+- If $i > $(( MAX_ITERATIONS * 7 / 10 )): You are in EXECUTION phase. Run the full production experiment with real API calls, full context, multiple tasks, multiple seeds. Produce the definitive paper-ready comparison table. No more exploration.
+
 Your three priorities are NOVELTY, ROBUSTNESS, and STRENGTH OF CLAIM:
 - NOVELTY: Implement architectural changes that make the Dynamic/Incremental RLM more novel. The prefix-sum analogy is the guiding principle.
 - ROBUSTNESS: Write and run experiments. Every claim needs benchmark evidence. Test edge cases.
 - STRENGTH: Quantify everything. When something works, measure how much. When it fails, diagnose why.
+
+CRITICAL REQUIREMENT: The research MUST include a head-to-head comparison of Incremental RLM vs Naive RLM (full recompute each turn) on the same streaming task, measuring F1, tokens, pair checks, wall-clock time, and cost. This is the comparison that proves the system works. Read the CRITICAL GAP section at the top of docs/research_log.md.
+
+EXTERNAL REVIEWER CONCERNS (MANDATORY): Three concerns from an external reviewer must be addressed with running code:
+1. PROVE losslessness: Run with aggressive history pruning, show P=1.0. Add --verify-lossless mode.
+2. PROFILE memory: tracemalloc on EntityCache/PairTracker at each turn. Report bytes. Extrapolate to 100K entities. Compare vs LLM context size.
+3. CROSS-BENCHMARK: Characterize the problem class. Attempt a second benchmark if feasible.
+Read the NEXT CYCLE PRIORITIES section at the bottom of docs/research_log.md for detailed specifications.
 
 You have FULL access to the entire codebase. You can and should:
 - Modify model architecture, training scripts, evaluation code, configs — ANYTHING

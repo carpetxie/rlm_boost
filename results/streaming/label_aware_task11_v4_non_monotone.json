@@ -1,0 +1,97 @@
+{
+  "condition": "A_non_monotone_sanity_check_v4",
+  "version": 4,
+  "task_idx": 11,
+  "model": "gpt-4o-mini",
+  "num_chunks": 5,
+  "max_chunk_chars": 5000,
+  "monotone_attrs": null,
+  "compliance_rate": 0.8,
+  "f1_progression": [
+    {
+      "chunk": 1,
+      "compliant": true,
+      "pairs": 0,
+      "f1": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "input_tokens": 26962,
+      "output_tokens": 3110,
+      "elapsed_sec": 58.4
+    },
+    {
+      "chunk": 2,
+      "compliant": false,
+      "pairs": 0,
+      "f1": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "input_tokens": 4366,
+      "output_tokens": 927,
+      "elapsed_sec": 16.07
+    },
+    {
+      "chunk": 3,
+      "compliant": true,
+      "pairs": 229,
+      "f1": 0.0153,
+      "precision": 0.0306,
+      "recall": 0.0102,
+      "input_tokens": 1754,
+      "output_tokens": 805,
+      "elapsed_sec": 15.57
+    },
+    {
+      "chunk": 4,
+      "compliant": true,
+      "pairs": 465,
+      "f1": 0.0381,
+      "precision": 0.0473,
+      "recall": 0.0319,
+      "input_tokens": 8042,
+      "output_tokens": 1449,
+      "elapsed_sec": 26.11
+    },
+    {
+      "chunk": 5,
+      "compliant": true,
+      "pairs": 622,
+      "f1": 0.0473,
+      "precision": 0.0498,
+      "recall": 0.045,
+      "input_tokens": 27613,
+      "output_tokens": 2692,
+      "elapsed_sec": 53.2
+    }
+  ],
+  "final_f1": 0.0473,
+  "total_input_tokens": 68737,
+  "total_output_tokens": 8983,
+  "per_turn_tokens": [
+    {
+      "turn": 1,
+      "input": 26962,
+      "output": 3110
+    },
+    {
+      "turn": 2,
+      "input": 4366,
+      "output": 927
+    },
+    {
+      "turn": 3,
+      "input": 1754,
+      "output": 805
+    },
+    {
+      "turn": 4,
+      "input": 8042,
+      "output": 1449
+    },
+    {
+      "turn": 5,
+      "input": 27613,
+      "output": 2692
+    }
+  ]
+}

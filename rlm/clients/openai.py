@@ -28,6 +28,7 @@ class OpenAIClient(BaseLM):
         api_key: str | None = None,
         model_name: str | None = None,
         base_url: str | None = None,
+        temperature: float | None = None,
         **kwargs,
     ):
         super().__init__(model_name=model_name, **kwargs)
@@ -46,6 +47,7 @@ class OpenAIClient(BaseLM):
         self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
         self.async_client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
+        self.temperature = temperature
 
         # Per-model usage tracking
         self.model_call_counts: dict[str, int] = defaultdict(int)
@@ -69,8 +71,9 @@ class OpenAIClient(BaseLM):
         if self.client.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
             extra_body["usage"] = {"include": True}
 
+        temp_kwargs = {"temperature": self.temperature} if self.temperature is not None else {}
         response = self.client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body, **temp_kwargs
         )
         self._track_cost(response, model)
         return response.choices[0].message.content
@@ -93,8 +96,9 @@ class OpenAIClient(BaseLM):
         if self.client.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
             extra_body["usage"] = {"include": True}
 
+        temp_kwargs = {"temperature": self.temperature} if self.temperature is not None else {}
         response = await self.async_client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body, **temp_kwargs
         )
         self._track_cost(response, model)
         return response.choices[0].message.content

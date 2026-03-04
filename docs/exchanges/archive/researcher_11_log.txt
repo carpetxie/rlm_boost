@@ -1,15 +1,24 @@
-The full verbose output confirms Tasks 3 and 6 are complete with all details matching the committed results. A few additional data points worth noting:
+All tasks are complete. Here's a summary of what was accomplished in this iteration:
 
-**Task 3 full token breakdown:**
-- Condition A: 47,430 input tokens total; Turn 4 used 6 LM iterations (max) + 39.1s elapsed — the most expensive turn
-- Condition B: 26,123 tokens, 7 LM iterations — surprisingly expensive for a 5K baseline (model thoroughly explored)
-- Condition C (25K oracle): 64 qualifying entities → 2016 pairs, 24,457 tokens, 7 iterations
+## Iteration 20 Summary
 
-**Task 6 full token breakdown:**
-- Condition A: 44,659 tokens; iteration counts [5,1,5,3,1] — highly variable, averaging 3 per turn
-- Condition B: 25,360 tokens, 7 LM iterations — same pattern as Task 3
-- Condition C (25K oracle): 60 qualifying entities → 1770 pairs, only 3,907 tokens, 2 iterations — very efficient
+### Code Changes
+1. **Fixed `apply_edits()` pair_checks tracking** in `rlm/core/incremental.py` — Phase 2 and Phase 3 now properly increment `_total_pair_checks` and return `pair_checks` in the result dict
+2. **Added TODO comment** to `compute_gold_pairs_with_edits()` about simplified qualifying check
+3. **Created `eval/multi_run_stability.py`** — new multi-run stability experiment runner
+4. **Created `eval/plot_per_turn_tokens.py`** — per-turn token comparison figure generator
+5. **Created `scripts/run_stability.sh`** — convenience runner for stability experiments
 
-**Notable pattern**: Condition B (single-turn 5K baseline) uses 7 LM iterations for Tasks 3 and 6 but only 2 for Task 1. This suggests the model struggles more with the "description/abstract concept" and "location/abbreviation" qualification conditions than "numeric value/location", requiring more REPL exploration before returning FINAL_VAR. This task-specific iteration variance is another dimension of the qualification-time asymmetry story.
+### Experiments Run (All Live API)
+| Experiment | Task | Runs | Key Result |
+|-----------|------|------|------------|
+| **Exp 51: Stability** | Task 1, k=5 | n=3 | F1=0.979±0.019, P=1.000±0.000 |
+| **Exp 52a: Cross-task** | Task 3, k=5 | A+D | F1=0.993 (identical), 71.4% savings, 2.7× speedup |
+| **Exp 52b: Cross-task** | Task 6, k=5 | A+D | F1=0.993 (identical), 90.9% savings, 4.9× speedup |
+| **Exp 53: Figure** | Existing data | — | Per-turn token plot saved |
 
-All background tasks are now fully resolved. Iteration 11 is definitively complete.
+### Key Findings
+1. **F1=1.0 was a lucky single run** — honest result is F1=0.979±0.019 across 3 runs. Two runs triggered retractions at Turn 3 (2,700 retractions, 1,387 permanent), reducing recall to 0.938.
+2. **P=1.0 is invariant** across all tasks, all runs (the structural guarantee holds)
+3. **Token savings generalize**: 71% (Task 3) to 91% (Task 6) — the structural formula is a lower bound
+4. **Cross-task validation complete**: 3 tasks at full corpus, all showing near-parity F1 with substantial savings

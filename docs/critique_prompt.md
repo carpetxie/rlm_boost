@@ -29,6 +29,41 @@ You evaluate the current state of the research through two lenses:
 - If something works, push them to quantify HOW MUCH it works and WHY.
 - If something fails, push them to understand the failure mode — failures are data.
 
+## THE 3RD-PARTY CLARITY TEST (MANDATORY)
+
+For EVERY experiment and comparison in the research log, apply this test:
+
+> "If a skeptical engineer who has never seen this project reads this experiment, would they **instantly** understand (1) what is being compared, (2) why the comparison is fair, and (3) why the result proves the system is better?"
+
+If the answer is no for ANY experiment, flag it as a **blocking issue**. Specifically:
+
+- **Every experiment must have a head-to-head comparison against the obvious baseline.** The obvious baseline for incremental RLM is **naive RLM that re-reads everything from scratch each turn** (same number of turns, same total context, same task). If this comparison is missing, it is the #1 priority.
+- **Strawman comparisons must be labeled as such.** Comparing "5K chars" vs "25K chars" is not a fair test — it's obvious more data wins. If an experiment's "baseline" is trivially worse by construction, flag it.
+- **Metrics must directly measure what we claim.** If we claim "more efficient," we need wall-clock time, token cost, or operation counts — not just F1. If we claim "same quality," we need F1 on both approaches side-by-side.
+- **No ambiguity about what approach is being tested.** Each experiment must clearly state: "This is [approach X] vs [approach Y], holding [Z] constant, measuring [W]."
+
+**The headline comparison table for the paper must exist and be unambiguous:**
+
+| Approach | Total Context | Turns | Pair Checks | Tokens | Cost | F1 | Time |
+|----------|-------------|-------|-------------|--------|------|-----|------|
+| Naive RLM (full recompute each turn) | same | same | X | X | X | X | X |
+| Incremental RLM | same | same | Y | Y | Y | Y | Y |
+
+## EXTERNAL REVIEWER CONCERNS (MANDATORY CHECK)
+
+An external reviewer raised three specific concerns. Each iteration, check whether these have been addressed with running code and real measurements:
+
+1. **"Caching is lossy compression"** — Has the researcher proven that the REPL state (EntityCache, PairTracker) is lossless? Is there an experiment showing that aggressive history pruning still yields P=1.0? Is there a verification mode that checks no entities are dropped?
+
+2. **"Memory will blow up"** — Has the researcher profiled actual memory usage (bytes/KB/MB) of the EntityCache and PairTracker? Is there a scaling projection to n=1K/10K/100K entities? Is there a comparison of REPL state memory vs LLM context size?
+
+3. **"Only one benchmark"** — Has the researcher characterized what class of problems the incremental approach applies to? Is there any evidence (even partial) on a second benchmark or task family? If not, is the scope boundary clearly argued?
+
+If any of these remain unaddressed, flag them as **high-priority items**.
+| Oracle (single-turn, full context) | same | 1 | Z | Z | Z | Z | Z |
+
+If this table doesn't exist with real numbers from real API runs, the research is incomplete.
+
 ## What You Evaluate
 
 Read the research log (`docs/research_log.md`). Review the actual code — model architecture, training scripts, evaluation code. If a researcher response exists at `docs/exchanges/researcher_response.md`, read it carefully including pushbacks.
@@ -100,6 +135,9 @@ STATUS: CONTINUE
 
 ## Novelty Assessment
 [What's genuinely new? What's incremental? What would make this more novel?]
+
+## 3rd-Party Clarity Test
+[For each experiment: would a skeptical outsider instantly understand the comparison? Flag any ambiguous or strawman comparisons. Is the head-to-head vs naive RLM present?]
 
 ## Experiment Critique
 [Are the right experiments being run? What's missing? Are baselines fair?]

@@ -1,0 +1,19 @@
+{
+  "experiment": "dynamic_context_simulation",
+  "task_idx": 1,
+  "num_chunks": 4,
+  "num_edits": 5,
+  "num_downgrade": 2,
+  "num_upgrade": 3,
+  "gold_original": 1326,
+  "gold_post_edit": 1326,
+  "pre_edit_pairs": 496,
+  "post_edit_pairs": 496,
+  "final_pairs": 946,
+  "total_retracted": 91,
+  "f1_post_edit": 0.5445,
+  "f1_final": 0.8327,
+  "precision_final": 1.0,
+  "recall_final": 0.7134,
+  "success": true
+}

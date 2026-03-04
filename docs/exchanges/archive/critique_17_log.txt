@@ -1,0 +1,24 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
+
+## Critique Summary — Iteration 17
+
+**Overall**: The research is in excellent shape — 21 iterations, 14 contributions, cross-model validation, and all external reviewer concerns addressed. The remaining work is about maximizing publication impact.
+
+**Scores**: All improved by +0.5 from last iteration. Novelty 8.0, Technical Soundness 9.5, Benchmark Performance 9.0, Scalability 7.5, Research Maturity 9.0.
+
+**The One Big Thing**: Write a **second-domain unit test** ($0, 30 min) that instantiates `IncrementalState` on a non-OOLONG problem (e.g., document-keyword matching). This transforms the "only one benchmark" concern from argument to demonstration — the library is already domain-agnostic, proving it takes 50 lines of synthetic test code.
+
+**3rd-Party Clarity Test**: All major tables PASS. The evidence is unambiguous.
+
+**External Reviewer Concerns**: 
+1. ✅ Losslessness fully proven
+2. ✅ Memory fully quantified  
+3. ⚠️ Single benchmark — addressed argumentatively but could be strengthened with a second-domain test
+
+**Four experiments recommended** (ordered by impact):
+1. Second-domain unit test ($0) — HIGHEST
+2. History pruning on Tasks 3/6 (~$0.04) — MEDIUM
+3. Task 11 failure analysis ($0) — LOW
+4. Fill Condition D temp=0 cell (~$0.02) — LOW
+
+**Code issues**: Minor — `apply_edits()` merge semantics, inline `import warnings`, no `__all__`, verify `reset()` clears chunk indices.

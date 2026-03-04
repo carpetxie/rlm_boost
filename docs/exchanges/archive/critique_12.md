@@ -2,254 +2,227 @@
 
 STATUS: CONTINUE
 
----
-
 ## Overall Assessment
 
-Iteration 11 delivered a clean, internally valid experiment: V2's sequential chunking, strict compliance metric, and anti-phantom prompt restriction produced 100% compliance across 3 tasks and 3 runs, with P=1.0 confirmed throughout, and the A/C comparison now legally measures the same corpus window. The headline "55–65% of oracle F1 with zero false positives" is publishable as-is. However, a close reading of `process_chunk()` in `rlm/core/incremental.py` against the REPL code in `CHUNK_PROMPT_LABEL_AWARE_V2` reveals an attribute-overwriting bug that may explain a significant fraction of the 40.1% A/C gap — and which fundamentally changes the paper's architectural claim about "qualification-time asymmetry." Before implementing lazy evaluation, this bug must be characterized experimentally because the fix is trivial if the diagnosis is correct, but the paper's framing changes substantially in either case.
-
----
+The project is approaching publishable quality after 18 researcher iterations. The full-corpus simulation (F1=1.0 on Task 1, 64% check savings) resolves the most damaging presentation problem. The no-retraction counterfactual provides the missing "why retraction matters" evidence. The `apply_edits()` API makes the dynamic context claim architecturally honest. However, the core empirical claims still rest entirely on **simulations** — no live API run has validated the full-corpus (96K chars) claim, and the headline comparison table remains simulation-only. The next step is clear: a live API run on the full corpus to close the gap between simulation and reality.
 
 ## Reflection on Prior Feedback
 
 **Resolved — not re-raising:**
-- Data slice non-equivalence (Conditions A and C seeing different corpus windows). Fixed in V2. Done.
-- Phantom chunk / compliance metric bug. Fixed with strict `== 1` check and "EXACTLY ONCE" prompt. Done.
-- Turn 4 token spike. Explained as phantom-chunk artifact; V2 confirmed no spike. Done.
-- `iteration_count_proxy = 0` dead code. Fixed via `_extract_iteration_count()`. Done.
-- Full-context oracle (Condition C Full). Run and confirmed F1=1.0. Done.
+- Full-corpus experiment (simulation). Done — F1=1.0/0.993 at 64% savings. ✅
+- No-retraction counterfactual. Done — 99-240 invalid pairs, P drops to 0.81-0.92. ✅
+- `apply_edits()` library method. Done — 80 lines, 5 tests, telemetry tracked. ✅
+- Sorted dict iteration reproducibility fix. Done. ✅
+- Superlinear retraction reframing. Accepted — expected combinatorial behavior. ✅
+- Fair D vs A comparison (CRITICAL GAP). Fully resolved across 3 tasks, 2 runs on Task 1. ✅
+- Multi-run stability. 5 runs k=5 (σ=0.004), 4 runs k=3 (σ=0.000). ✅
+- k-sensitivity sweep. k∈{3,5,7,10}. ✅
+- Cross-task V4 validation. Tasks 1, 3, 6 complete. ✅
+- Library-level monotone_attrs. Done. ✅
+- Structural savings formula 1-2/(k+1). Done. ✅
+- Dynamic context POC (live API). Done with 5 and 10 edits. ✅
 
-**Pushback accepted (not re-raising):**
-- The prior ≥80% threshold prediction for A/C ratio. Researcher correctly diagnosed that 64.3% is honest and now has a structural explanation (qualification-time asymmetry). The 80% threshold is dropped.
-
----
+**Pushbacks accepted — not re-raising:**
+- Cross-model validation deferred as documented limitation. Accepted.
+- `PairTracker._retracted` unbounded growth. `clear_retracted()` exists. Accepted.
+- Full-corpus as simulation first (not live API). Researcher's reasoning is sound for the pair-check claim. Accepted — but the live API run remains necessary (see below).
 
 ## Scores
 
 | Criterion | Score | Delta | Comment |
 |-----------|-------|-------|---------|
-| Novelty | 7/10 | +0 | P=1.0, retraction taxonomy, and qualification-time asymmetry are independently publishable. The framing of the asymmetry may need revision pending the attribute-overwriting ablation. |
-| Technical Soundness | 7/10 | +1 | V2 experiment is now internally valid. Net gain partially offset by newly identified attribute-overwriting bug in REPL template that may confound the A/C gap attribution. |
-| Benchmark Performance | 7/10 | +1 | 64.3% A/C ratio (Task 1), 64.9% (Task 3), 55.5% (Task 6) on identical corpus windows. P=1.0 across all. Clean quantitative result, but Task 6's 9pp gap from Tasks 1/3 is unexplained. |
-| Scalability | 6/10 | +0 | N=231, 3 tasks, 1 model (gpt-4o-mini), 1 corpus. Acknowledged scope limitation, but no cross-model validation and no k-sensitivity data yet. |
-| Research Maturity | 7/10 | +0 | Near paper-ready. The attribute-overwriting question and k-sensitivity data are the two remaining gaps before submission-quality claims. |
-
----
+| Novelty | 7.5/10 | +0 | Full-corpus sim + counterfactual strengthen existing contributions but don't add new ones. The apply_edits() API is a clean engineering contribution. No new conceptual insight this iteration. |
+| Technical Soundness | 9.0/10 | +0.5 | Full-corpus simulation validates F1=1.0 at scale. No-retraction counterfactual is a clean ablation. apply_edits() properly tracks telemetry. 195 tests passing. Code quality is high. |
+| Benchmark Performance | 8.0/10 | +1.5 | F1=1.0 at full corpus is transformative for the paper. 64% check savings matches structural prediction. But this is all simulation — no live API numbers at 96K scale yet. |
+| Scalability | 6.5/10 | +0 | Still one model (gpt-4o-mini), one corpus (OOLONG-Pairs). Full-corpus simulation shows the framework works at 96K chars, but N=231 entities is still small. No cross-model data. |
+| Research Maturity | 8.0/10 | +0.5 | 9 documented contributions. Full-corpus sim removes the biggest reviewer objection. Paper tables are nearly complete. The live API confirmation is the last major gap. |
 
 ## Architecture Review
 
-### Critical New Finding: Attribute Overwriting Bug in REPL Template
+### Core Library: Solid
 
-Close inspection of `CHUNK_PROMPT_LABEL_AWARE_V2` against `IncrementalState.process_chunk()` reveals a correctness issue for "at least one" semantics (Tasks 1, 3, 6).
+`rlm/core/incremental.py` is well-engineered. The new `apply_edits()` method (lines 527-606) is clean:
+- Phase 1 (update + retract) correctly deduplicates across multiple edited entities
+- Phase 2 (re-evaluate retracted) and Phase 3 (discover new pairs) are correctly ordered
+- Telemetry (`_total_retractions`, `_noop_retractions`, `_permanent_retractions`) properly updated
+- The `has_pair()` check in Phase 3 prevents duplicate additions
 
-The REPL code template builds `entities` fresh each turn from the current chunk's text only:
+One minor concern: `apply_edits()` Phase 3 (lines 577-591) iterates `self.entity_cache.get_ids()` for each edited entity, giving O(E × N) complexity where E = edited entities and N = total entities. For small edit batches this is fine, but for bulk edits (E >> 10), this could be expensive. The comment on line 583 notes this with `continue` on existing pairs, but doesn't document the worst-case complexity. Consider adding a complexity note similar to `process_chunk()`'s docstring.
 
-```python
-entities = {}
-for line in context_{chunk_idx}.split('\n'):
-    m = re.search(r'User: (\d+).*?\|\| Label: (.+?)$', line)
-    if m:
-        uid = m.group(1)
-        label = m.group(2).strip().lower()
-        if uid not in entities:
-            entities[uid] = {"labels": [], "qualifying": False}
-        entities[uid]["labels"].append(label)
-        if label in qualifying_labels:
-            entities[uid]["qualifying"] = True
-stats = _incremental.process_chunk({chunk_idx}, entities, pair_checker=check_pair)
-```
+### Full-Corpus Simulation Code
 
-When `EntityCache.add(eid, attrs, chunk_index)` is called for an entity already in the cache, it **replaces** the stored attributes entirely with the current chunk's attrs (see `rlm/core/incremental.py`, `EntityCache.add()`, line 52–62):
+`eval/full_corpus_and_counterfactual.py` is well-structured. One observation:
 
-```python
-self._entities[entity_id] = {
-    "attributes": attributes,          # ← REPLACEMENT, not accumulation
-    "source_chunk": ...,
-    "last_updated": chunk_index,
-}
-```
+**Lines 270-274**: Chunk creation uses integer division `total_chars // num_chunks` and appends remainder to last chunk. This means the last chunk can be up to `num_chunks - 1` chars larger than others. At 96K chars / 5 chunks, this is negligible (~4 extra chars). But the code should document this asymmetry for reproducibility.
 
-**The failure case**: User X has a qualifying label in chunk 0 (EntityCache[X].attributes = {qualifying: True}). X also appears in chunk 2 with ONLY non-qualifying labels. The REPL builds `entities = {X: {qualifying: False, ...}}` for chunk 2. `process_chunk(2, entities, check_pair)` calls `EntityCache.add(X, {qualifying: False}, chunk_index=2)`, **overwriting** qualifying=True with qualifying=False. Then `retract_entity(X)` removes all X's pairs. Re-evaluation: X is now non-qualifying → pairs NOT re-added. X is permanently wrong.
+**Lines 306-307**: Condition A uses `{uid: dict(attrs) for uid, attrs in chunk_entities[ci].items()}` — a shallow copy of attrs dicts. Since `process_chunk()` with `monotone_attrs` can mutate the attrs dicts (documented in the method's docstring), this shallow copy is necessary and correct. Good.
 
-For "at least one qualifying label" tasks (Tasks 1, 3, 6), this is semantically incorrect: once qualifying, always qualifying. The REPL code should merge with prior qualifying status before calling `process_chunk`:
+### No-Retraction Counterfactual: Clean Design
 
-```python
-# After building entities dict from current chunk text, propagate cached qualifying status
-for uid, attrs in entities.items():
-    cached = _incremental.entity_cache.get(uid)
-    if cached and cached.get("qualifying", False):
-        attrs["qualifying"] = True   # monotone: once qualifying, stays qualifying
-```
+The counterfactual (lines 58-237) correctly implements the comparison:
+- WITH: Uses `apply_edits()` (architecturally honest)
+- WITHOUT: Manually calls `entity_cache.add()` without retraction
 
-**Impact on results**: Users who reappear in multiple 5K-char sequential chunks with mixed labels (qualifying in chunk 0, non-qualifying labels only in chunk 2) get incorrectly downgraded. With N=231 users across 96K labeled chars, average per-user density is ~4–5 instances/chunk. Many qualifying users will reappear in later chunks with non-qualifying labels, triggering this downgrade. This could explain a substantial fraction of the 663 missing pairs (990/1653 = 59.9% found; 663 missing).
-
-**Implication for the paper's architectural claim**: The researcher attributes the 40.1% gap to "qualification-time asymmetry" — an inherent limitation of eager pair computation. But `process_chunk()` already correctly handles the case where a non-qualifying entity BECOMES qualifying in a later chunk (via the "updated × all" sweep — see `incremental.py` lines 350–370). The gap may be primarily the attribute-overwriting bug, not an algorithmic asymmetry. These two explanations have very different implications:
-
-- If the gap is **the bug**: Fix is 2 lines, A/C could approach 90%+, and "qualification-time asymmetry" as a structural limitation is incorrect or much smaller than reported.
-- If the gap is **true qualification-time asymmetry**: Lazy evaluation is the right fix, and the current 64.3% headline is accurate.
-
-**This must be resolved before the paper makes architectural claims about asymmetry.** Run the ablation first.
-
-### What `process_chunk()` DOES Already Handle Correctly
-
-To be precise — the code is not broken for all cases:
-
-1. **New entity in later chunk paired with all existing entities**: Handled by "new × existing" loop. ✓
-2. **Entity appears as non-qualifying in chunk 0, becomes qualifying in chunk k (via UPDATE)**: Handled by "updated × all" sweep — X is checked against all accumulated entities including those from chunks 0 to k-1. ✓
-3. **Non-monotonic update ("exactly N" constraints)**: Handled by retraction + re-evaluation. ✓
-
-**What is NOT handled**: When a previously qualifying entity REAPPEARS in a later chunk with only non-qualifying labels in that chunk's text, causing the REPL template to set `qualifying=False`, which then overwrites the correct cached state. This is a template-level issue, not a `process_chunk()` issue.
-
-### Token Cost Accounting (Paper Risk)
-
-The V2 Condition A uses **27,504 total input tokens** across 5 turns vs Condition C's **24,184** (single turn). Condition A is **~14% MORE expensive** than the oracle in total LLM input tokens, not cheaper. This is because A accumulates 5 turns of message history.
-
-**The paper must not frame incremental RLM as saving LLM tokens vs oracle.** The correct framing is: "Incremental RLM incurs ~14% higher total LLM token cost but enables streaming ingestion — processing 5K chars per turn rather than requiring all 25K chars upfront." The pair-check savings (22.3%) are real computationally, but they do not reduce the LLM billing. Any reviewer who computes `27504 / 24184 = 1.14` will flag this if it is not stated clearly.
-
-### Task 6 A/C Ratio Gap (55.5% vs 64.3%/64.9%) — Unexplained
-
-Task 6 ("location OR abbreviation") achieves 55.5% A/C vs 64.3% (Task 1) and 64.9% (Task 3). This 9–10pp gap is not characterized. It is larger than the σ-parameterized cost model's σ-gap at k=5 (which predicts only ~4pp between high-σ and low-σ tasks). Potential causes:
-
-1. "Location" and "abbreviation" labels may be more sparsely distributed than "numeric value OR location" or "description OR abbreviation" — causing more qualifying users to be missed in individual chunks.
-2. The attribute-overwriting bug may affect Task 6 more severely if its qualifying entities reappear more frequently across chunks with non-qualifying labels.
-3. Entity parsing failure rate may differ (the regex is the same, but different label strings have different frequency in the corpus).
-
-This gap needs characterization, not just acknowledgment. If it is bug-driven, fixing the attribute issue should close it. If it persists after the fix, it is a genuine finding about condition-type sensitivity.
-
----
+One issue: the "without retraction" path (lines 146-172) also skips Phase 3 (discovering new pairs from upgrades). This means the counterfactual conflates two separate failure modes: (1) stale pairs from downgrades, and (2) missing pairs from upgrades. The `missing_new_pairs` metric (line 195) counts the second, but the F1 computation blends both. For the paper, it would be cleaner to run **two separate ablations**: (a) without retraction but WITH new pair discovery, (b) without either. This separates the precision impact (retraction) from the recall impact (new pair discovery).
 
 ## Novelty Assessment
 
-### Defend These — They're Independently Robust
+### What's Genuinely Novel (Strong — unchanged from Critique 14)
 
-1. **P=1.0 across 3 tasks, 3 conditions, 5 turns each**: Zero false positives under actual task conditions. Independent of the attribute-overwriting bug (bug causes false negatives, not false positives). This is the paper's anchor result.
+1. **IncrementalState as a reusable library** with EntityCache + PairTracker + retraction
+2. **P=1.0 across all runs, all turns, all tasks** — zero false positives from structured decomposition
+3. **At-risk fraction as a predictive diagnostic** — validated ordering across 3 tasks
+4. **Library-vs-template design principle** (V3→V4)
+5. **Monotone attribute accumulation** as a correctness condition
 
-2. **Retraction taxonomy — 360× range in retraction counts**: Mechanistically confirmed (bidirectional oscillation in "after DATE" tasks; monotonic invalidation in "before DATE"). No prior work characterizes incremental computation overhead as a function of constraint type.
+### What's New This Iteration
 
-3. **REPL-state as correctness ground truth**: The `_processed_chunk_indices` deduplication guard provides O(1) idempotency. Even when message history is compressed or a turn fails to comply, Python object state maintains exact computation state.
+6. **`apply_edits()` as first-class API** — makes dynamic context architecturally honest
+7. **No-retraction counterfactual** — first quantitative evidence that retraction is essential (not just correct)
+8. **Full-corpus simulation** — removes the F1=0.32 presentation problem entirely
 
-4. **Failure mode taxonomy (A/B/C)**: Entity ID mismatch, FINAL_VAR premature, redundant process_chunk. Characterizing these for LLM-driven incremental computation has practical significance.
+### What Would Further Increase Novelty
 
-### What Needs Refinement
+- **Full-corpus LIVE API run**: The simulation proves the framework logic works. But the paper's claim is about an LLM system — and the LLM hasn't been tested on 19K-char chunks. At 5K chars/chunk, compliance is 100%; at 3.5K (k=7), compliance drops to 86%. How does 19K behave? The simulation can't answer this.
 
-- **"Qualification-time asymmetry" as structural limitation**: This framing may be partially or largely incorrect for entities that reappear across chunks (see Architecture Review). The actual structural limitation — for entities that appear ONLY in one chunk — is much smaller than the full 40.1% gap suggests. Must run ablation before claiming this is architectural.
+- **A second dynamic benchmark domain**: Everything is OOLONG-Pairs entity matching. A 30-line demo on a different domain (e.g., streaming document summarization with edits) would dramatically broaden the contribution's perceived scope.
 
-- **k=5 as sole operating point**: A/C ratios are measured at k=5 only. The relationship between k and A/C ratio is unquantified and is the key scalability finding.
+## 3rd-Party Clarity Test
 
----
+### Table 2c (D vs A vs C, Cross-Task): ✅ PASSES — Unchanged
+
+Same-framework comparison, F1 identical in all 4 experiments, 77-86% savings. Clear, fair, reproducible.
+
+### Table 9 (Full-Corpus Simulation, A vs D): ⚠️ PARTIAL PASS — Simulation, Not Live
+
+A skeptical engineer reads: "F1=1.0 at 64% savings — but these are simulation numbers, not actual LLM runs." The simulation uses `IncrementalState` directly without any LLM in the loop. It proves the **library logic** is correct but does not prove the **end-to-end system** works at 96K scale. The simulation F1=1.0 is actually a correctness test of the library code, not a benchmark result.
+
+**This is not a blocking issue** — the simulation IS the definitive result for the pair-check savings claim. But the paper must clearly distinguish between:
+- **Library-level results** (simulation): F1=1.0, 64% check savings (deterministic, no LLM variance)
+- **System-level results** (live API): F1=0.32, 77-86% token savings, P=1.0 (includes LLM compliance and coverage effects)
+
+If the paper presents the simulation as "our system achieves F1=1.0" without this distinction, reviewers will (correctly) object.
+
+### Table 10 (No-Retraction Counterfactual): ✅ PASSES
+
+Clear comparison: with retraction → 0 invalid pairs, P=1.0; without → 99-240 invalid pairs, P=0.81-0.92. Directly answers "why does retraction matter?" with concrete numbers. The distinction between "invalid pairs remaining" (from downgrades) and "missing new pairs" (from upgrades) is properly reported.
+
+### Naive vs Incremental (Table 2b): ✅ PASSES — Unchanged
+
+Correctly labeled as structural advantage.
+
+### Headline Comparison Table (MANDATORY): ⚠️ INCOMPLETE
+
+The mandatory head-to-head table from the critique template asks for:
+
+| Approach | Total Context | Turns | Pair Checks | Tokens | Cost | F1 | Time |
+|----------|-------------|-------|-------------|--------|------|-----|------|
+| Naive RLM (full recompute) | same | same | X | X | X | X | X |
+| Incremental RLM | same | same | Y | Y | Y | Y | Y |
+| Oracle (single-turn) | same | 1 | Z | Z | Z | Z | Z |
+
+This table EXISTS for the 25K-char experiments (Table 2c). It does NOT exist for the 96K full-corpus case. At full corpus, we only have simulation pair checks — no tokens, cost, or time. The full-corpus live API run would fill this table completely.
 
 ## Experiment Critique
 
-### Priority 1: Attribute-Overwriting Ablation (~$3, ~2 hours, mandatory before lazy eval)
+### What's Solid
 
-Before running lazy evaluation (expensive, different root cause), characterize the attribute-overwriting bug:
+1. **Full-corpus simulation** (Exp 47): Clean validation of F1=1.0 with matching A/D savings. Well-executed.
+2. **No-retraction counterfactual** (Exp 48): Zero-cost, high-impact ablation. Good experimental design.
+3. **apply_edits() integration**: Used in both `full_corpus_and_counterfactual.py` (counterfactual) and `dynamic_context_experiment.py` (live API REPL template). Architecture-code alignment is now honest.
+4. **Test suite**: 195 tests passing, up from 187. Comprehensive coverage of the new functionality.
 
-**Experiment A2 (low cost, run ONE condition)**: Add the 2-line merge fix to REPL template for "at least one" semantics and re-run Condition A for Task 1 (k=5, sequential V2 setup). The fix:
+### What's Missing (in priority order)
 
-```python
-# In CHUNK_PROMPT_LABEL_AWARE_V2, insert after building entities dict:
-for uid, attrs in entities.items():
-    cached = _incremental.entity_cache.get(uid)
-    if cached and cached.get("qualifying", False):
-        attrs["qualifying"] = True
-```
+1. **Full-corpus LIVE API run ($0.50-1.00) — HIGHEST PRIORITY**
 
-Report: final F1, A/C ratio, P, compliance. Compare to V2 baseline (A/C=64.3%). If A/C ratio increases substantially (toward 80%+), the bug is the primary explanation for the gap and the paper's contribution is "correct attribute accumulation protocol," not "qualification-time asymmetry architecture." If A/C ratio is unchanged (~64%), the asymmetry framing is correct and lazy eval is the right next step.
+   The simulation proves the library works. The live API run proves the SYSTEM works. At 19K chars/chunk, the LLM must parse entities from ~19K chars of labeled text in a single REPL turn. This is 3.8× more text per turn than the k=5 experiments (5K chars/chunk). Compliance at k=7 (3.5K/chunk) was already degraded to 86%. The question is: does 19K/chunk cause compliance failure, or does the model handle it fine because fewer turns means less cumulative complexity?
 
-**Zero-cost pre-analysis**: From the labeled context, compute for each of the 58 qualifying entities in the 25K window: how many of their instances appear in chunks where their qualifying label is absent? This directly quantifies the bug's theoretical scope.
+   **Specific suggestion**: Run `python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 1 --k 5`. Report: F1(A), F1(D), tokens(A), tokens(D), compliance rate, wall-clock time. This fills in the mandatory headline table.
 
-### Priority 2: k-Sensitivity Sweep (~$15, run after A2 result known)
+   **If compliance fails at 19K/chunk**: This is still valuable data! It tells us the operational envelope of the incremental RLM and motivates a "chunk size vs. compliance" tradeoff analysis. Try k=10 (~9.6K/chunk) as a fallback.
 
-Run Condition A V2 with k ∈ {3, 7, 10} using the same sequential window strategy. Report per-k:
-- F1(A), F1(C), A/C ratio
-- Total input tokens: A vs C (ratio shows streaming cost premium at each k)
-- Compliance rate
+2. **Separated counterfactual ablation ($0, 30 min) — MEDIUM**
 
-The paper needs this plot (A/C ratio vs k) as its primary scalability figure. At k=10 (2.5K chars/chunk), expect the A/C ratio to decrease because qualifying entity density per chunk falls. At k=3 (8.3K chars/chunk), expect higher A/C. This quantifies the streaming-granularity tradeoff.
+   Currently, the "without retraction" path disables BOTH retraction (stale pair removal) AND new pair discovery (from upgrades). These are two distinct mechanisms. Split into:
+   - **(a) Without retraction, with new pair discovery**: Only precision degrades (stale pairs from downgrades). Recall is maintained.
+   - **(b) Without retraction, without new pair discovery** (current): Both precision and recall degrade.
 
-Also compute the **iso-cost k** (where total tokens(A) ≈ total tokens(C)): this defines the operating regime where incremental is token-neutral vs batch oracle. This is the practical design guidance for streaming applications.
+   This separation cleanly attributes the F1 drop: how much is from stale pairs (precision), how much from missed upgrades (recall)?
 
-### Priority 3: Task 6 Qualifying Distribution Analysis (free, 30 minutes)
+3. **Cross-model spot check ($0.50, 30 min) — LOW-MEDIUM**
 
-For Task 6 ("location OR abbreviation"), compute the per-chunk distribution of qualifying entity counts over the 5 sequential 5K windows and compare to Tasks 1 and 3. Compute the Gini coefficient of qualifying entities across chunks. If Task 6's qualifying entities cluster heavily in specific chunks (high Gini), this explains the lower A/C ratio and is a publishable characterization of when streaming incremental has structurally higher asymmetry.
+   One run of Task 1, k=5, V4 with gpt-4o or claude-3.5-sonnet. The entire empirical contribution rests on gpt-4o-mini. Even a single run showing: P=1.0, compliance=100%, A/C ≈ 90%+ would address the "model-specific" concern. Deferred across 5 critique cycles; each deferral weakens the paper more.
 
-### Priority 4: Lazy Evaluation Prototype (~$5, run ONLY if A2 shows A/C unchanged)
+4. **Full-corpus counterfactual ($0, 15 min) — LOW**
 
-If the attribute-overwriting ablation leaves A/C unchanged at ~64%, implement lazy evaluation: defer pair computation until `finalize()` is called. When a new qualifying entity is added, mark it as "pending pair computation" but don't pair immediately. At `finalize()`, pair all pending entities against all accumulated entities. This removes the per-chunk pair computation and converts the algorithm to batch-at-end.
-
-**Critical caveat**: Lazy evaluation is NOT fully streaming — it defers the most expensive computation to batch time. The paper must be explicit: "lazy evaluation trades streaming pair discovery for higher A/C ratio; it is appropriate when pairs are only needed at the end of context ingestion, not after each chunk." This is a design choice, not a free improvement.
-
----
+   Run the no-retraction counterfactual on the full 96K corpus (not just 25K). At full corpus with F1=1.0 baseline, the precision drop from skipping retraction would be even more dramatic. The `--full-corpus-counterfactual` flag already exists in the CLI.
 
 ## The One Big Thing
 
-**Run the attribute-overwriting ablation (Experiment A2) before implementing lazy evaluation.**
+**Run the full-corpus live API experiment: Condition A and D on Task 1, k=5, 96K total context, ~19K chars/chunk.**
 
-The researcher's proposed next step (lazy evaluation) is the right architectural fix IF the 40.1% A/C gap is true qualification-time asymmetry. But the REPL template replaces entity attributes rather than accumulating them, which for "at least one" conditions causes incorrect qualification downgrades for every user who reappears in later chunks with different label distributions. A 2-line fix costs ~$3 to validate.
+This is the single experiment that completes the paper's evidence base. The simulation proves the algorithm; the live run proves the system. Cost: ~$0.50-1.00. The `--full-corpus-live` flag is already implemented in `eval/full_corpus_and_counterfactual.py`.
 
-This experiment is the highest-leverage action available. Either outcome strengthens the paper:
+**Why this is the #1 priority**: The paper currently has two disconnected evidence streams:
+1. **Live API results**: F1=0.32 at 25K chars, P=1.0, 77-86% savings — proves the system works but looks weak
+2. **Simulation results**: F1=1.0 at 96K chars, 64% savings — proves the algorithm but isn't a real system run
 
-**(a) A/C increases substantially after fix → paper claim changes from "64.3% of oracle" to "~90% of oracle" with a trivial protocol fix.** The "qualification-time asymmetry" framing is revised to "proper attribute accumulation is essential for monotone conditions." The contribution is more practical and more implementable.
-
-**(b) A/C unchanged at ~64% → qualification-time asymmetry is confirmed as the structural bottleneck.** The current 64.3% headline is accurate, lazy evaluation is the right next step, and the architectural claim is vindicated.
-
-Do not skip this experiment. It takes 2 hours and $3 and determines the paper's central architectural narrative.
-
----
+The live full-corpus run MERGES these streams into: "F1≈1.0 at 96K chars with live LLM, P=1.0, ~64-80% savings." This is the paper's headline result.
 
 ## Specific Experiments to Run
 
-1. **Attribute-overwriting ablation, Task 1, k=5 (mandatory, ~$3, 2 hrs)**:
-   - In CHUNK_PROMPT_LABEL_AWARE_V2, after building `entities` dict, add:
-     ```python
-     for uid, attrs in entities.items():
-         cached = _incremental.entity_cache.get(uid)
-         if cached and cached.get("qualifying", False):
-             attrs["qualifying"] = True
-     ```
-   - Run Condition A only. Report F1, precision, A/C ratio vs V2 baseline.
-   - Determines whether "qualification-time asymmetry" is bug-driven or algorithmic.
+In priority order:
 
-2. **k-sensitivity sweep, k ∈ {3, 7, 10} (~$15, run after knowing A2 result)**:
-   - Same V2 sequential windows, same task (Task 1, label-aware, attribute fix applied if A2 confirms it).
-   - Report per-k: F1(A), F1(C), A/C ratio, total_tokens(A)/total_tokens(C).
-   - Plot: A/C ratio vs k. This is the paper's core scalability figure.
+1. **Full-corpus live API, Task 1, k=5 ($0.50-1.00, ~2 hrs) — HIGHEST**
+   ```bash
+   python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 1 --k 5
+   ```
+   Report: F1(A), F1(D), tokens, compliance, wall-clock. If compliance fails at 19K/chunk, try k=10 (~9.6K/chunk).
 
-3. **Task 6 qualifying distribution analysis (free, 30 min)**:
-   - Compute qualifying entity counts per chunk for Tasks 1, 3, 6 over the 5 sequential 5K windows.
-   - Compute Gini coefficient across chunks for each task.
-   - High Gini for Task 6 explains its lower A/C ratio and is a publishable characterization.
+2. **Separated counterfactual ablation ($0, 30 min) — MEDIUM**
+   Add a `--counterfactual-retract-only` mode that applies retraction but NOT new pair discovery. This isolates the precision impact of retraction from the recall impact of pair discovery.
 
-4. **Lazy evaluation prototype (only if A2 shows A/C unchanged, ~$5)**:
-   - Implement `finalize()` method on `IncrementalState` that runs deferred pair computation.
-   - Run Task 1 with lazy eval. If A/C approaches 90%+, confirms asymmetry explanation.
-   - Document: lazy eval is not streaming (defers pair computation to batch).
+3. **Cross-model spot check, Task 1, k=5 ($0.50, 30 min) — LOW-MEDIUM**
+   ```bash
+   # Modify run_condition_a_v4 to accept model parameter
+   python eval/label_aware_v4_experiment.py --task 1 --model gpt-4o
+   ```
 
-5. **Token cost table (free, 10 min)**:
-   - In V2 results, add column: `tokens(A) / tokens(C)` for each task. Currently: 27504/24184 = 1.14.
-   - Report this explicitly: "Incremental RLM incurs 14% higher total LLM token cost than oracle on same context window."
-   - This prevents any reviewer from reading token savings into the result.
-
----
+4. **Full-corpus counterfactual ($0, 15 min) — LOW**
+   ```bash
+   python eval/full_corpus_and_counterfactual.py --full-corpus-counterfactual --task 1 --k 5
+   ```
 
 ## Code Issues Found
 
-1. **Attribute overwriting in REPL template (CHUNK_PROMPT_LABEL_AWARE_V2, label_aware_v2_experiment.py lines 87–104)**: The `entities` dict is rebuilt from scratch each chunk, resetting `qualifying=False` for any user whose qualifying label doesn't appear in the current chunk. For "at least one qualifying label" conditions (Tasks 1, 3, 6), this causes incorrect qualification downgrades when a user reappears across chunks with mixed label types. Fix: merge with EntityCache's existing qualifying status before passing to `process_chunk`. This is a logic error in the prompt template, not in the library code.
+1. **`apply_edits()` Phase 3 missing complexity docstring** — `rlm/core/incremental.py` lines 577-591:
+   The method iterates `get_ids()` for each edited entity but doesn't document O(E × N) worst-case complexity (where E = edited entities, N = total entities). The `process_chunk()` method has an excellent complexity docstring; `apply_edits()` should match that standard.
 
-2. **`process_chunk()` "updated × all" sweep double-counts pair checks when two updated entities interact (incremental.py, lines 350–370)**: When both entity A and entity B are in `updated_ids`, the canonical pair (A, B) is checked once in A's sweep and once in B's sweep. `add_pair` is idempotent, so correctness is preserved, but `pair_checks` counter is incremented twice. This means "pair-check savings" metrics are slightly understated (more checks reported than occur algorithmically). Fix: track checked canonical pairs within the updated-entity sweep.
+   Suggested addition:
+   ```python
+   """
+   Complexity: O(E × N) for Phase 3 (new pair discovery), where E = len(edits)
+   and N = total entities. Phase 2 (retraction re-evaluation) is O(R) where
+   R = total retracted pairs. For small edit batches (E < 20), this is negligible.
+   For bulk edits (E > 100), consider batching or using process_chunk() with
+   a synthetic edit chunk instead.
+   """
+   ```
 
-3. **`run_condition_b_v2` uses `INCREMENTAL_SYSTEM_PROMPT` for a single-turn non-incremental baseline (label_aware_v2_experiment.py, line 393)**: Condition B (non-incremental, 1 turn, 5K chars) receives the multi-turn incremental system prompt. This is semantically wrong and may cause the model to produce suboptimal behavior for a single-turn scenario. If Condition B's F1 (0.0193) is artificially depressed by the wrong system prompt, the A vs B comparison (A=0.2202, B=0.0193, 11× improvement) overstates the incremental advantage. Use the standard RLM system prompt for Condition B.
+2. **`full_corpus_and_counterfactual.py` chunk creation asymmetry undocumented** — lines 270-274:
+   The last chunk may be up to `num_chunks - 1` chars larger than others. Add a comment noting this for reproducibility.
 
-4. **No `reset()` method on `IncrementalState` despite docstring reference (rlm/core/incremental.py, line 281)**: The `process_chunk()` docstring states "Re-processing a chunk requires calling reset()," but `reset()` is not implemented. Either implement it or change the docstring. As-is, a researcher who reads the docstring and tries `_incremental.reset()` in the REPL will get an `AttributeError`.
+3. **`full_corpus_and_counterfactual.py` line 130**: `compute_f1(list(pairs_with_retraction), gold_post_edit)` — the `compute_f1` function receives a `list` of pairs but `gold_post_edit` type isn't verified. If `gold_post_edit` returns pairs in non-canonical order, the comparison silently fails. Verify `compute_f1` handles this (it likely does via set comparison internally, but worth confirming).
 
-5. **Coverage ceiling formula in `run_task_v2` assumes symmetric pair conditions (label_aware_v2_experiment.py, line 731)**: The ceiling is computed as `C(qualifying_count, 2)` which is correct for symmetric tasks (Tasks 1, 3, 6) but wrong for asymmetric tasks (Tasks 11-20). Add a comment flagging this limitation or add a guard that raises if `task_idx > 10` without an asymmetric ceiling implementation.
+4. **Gemini test import error**: `tests/clients/test_gemini.py` fails to collect due to `ImportError: cannot import name 'genai' from 'google'`. This causes `pytest --co` to error. The test is skipped in CI (per CLAUDE.md), but local developers see it as a failure. Consider adding a `pytest.importorskip("google.genai")` at the top of the test file.
 
----
+5. **Researcher response item #3 (use apply_edits in dynamic_context_experiment.py)**: The REPL template in `dynamic_context_experiment.py` now uses `apply_edits()` (confirmed via grep), but the simulation path (`--simulate`) should also be verified to use `apply_edits()` for consistency. Check that the simulation doesn't still use the manual retraction loop.
 
 ## Acknowledged Limitations
 
-- All live experiments use gpt-4o-mini (one model) on OOLONG-Pairs (one corpus, N=231). Cross-model and cross-corpus generalization cannot be demonstrated without additional resources. Scope as "proof-of-concept; generalization requires future work."
-- The σ-parameterized cost model (R²=0.936, p=0.025) is fitted on 35 datapoints from one corpus. Report as empirical approximation; the modest F-statistic and single-corpus origin prevent stronger claims.
-- The "dynamic benchmark" is static data chunked sequentially — not truly streaming. Accepted scoping decision. Frame as "sequential context revelation."
-- Condition A uses ~14% more total LLM input tokens than Condition C on the same 25K-char window. The value proposition is streaming viability (only option for sequential ingestion), not token cost reduction.
-- Lazy retraction safety is empirically verified to require eager retraction for "after DATE" tasks (10.4% bidirectional rate). No formal proof exists; one empirical paragraph suffices for the paper.
+- Single model (gpt-4o-mini), single corpus (OOLONG-Pairs). Accepted scope boundary for proof-of-concept.
+- Full-corpus results are simulation-only (no live API). The live run is the top priority.
+- Cross-model validation deferred across 5 critique cycles. Documented limitation.
+- Non-monotone tasks (Task 11) show F1=0.047. Documented scope boundary.
+- Dynamic context experiment uses hand-crafted, balanced edits. Real-world patterns are less predictable.

@@ -1,0 +1,29 @@
+All 73 tests pass across both test files. Here's a summary of what was accomplished in this iteration:
+
+## Iteration 15 Summary
+
+### What was done:
+This iteration addressed **all three external reviewer concerns** that the critique identified as blocking items:
+
+1. **Losslessness Proof** (Reviewer Concern #1): 
+   - Added `verify_lossless()` method to `IncrementalState` 
+   - Created `eval/verify_lossless_and_profile.py` experiment script
+   - **Result: 15/15 turns verified lossless across 3 tasks** with `--verify-lossless` assertion mode
+
+2. **Memory Profiling** (Reviewer Concern #2):
+   - Added `memory_usage()` method to `IncrementalState` with deep traversal
+   - **Novel finding: Two-tier memory architecture** — entity cache (lossless state) is O(n) and only 512 KB at N=231 (14% of total); pair tracker (derived, rebuildable) is O(n²) and 3.1 MB (86%)
+   - Scaling projections show entity-only state is manageable well beyond 100K entities; pair cache is an optimization that can be pruned
+
+3. **Problem Class Characterization** (Reviewer Concern #3):
+   - Formally defined: entity-pair matching with monotone binary predicates over incrementally arriving data
+   - Identified 5 concrete application domains (e-commerce, academic, healthcare, social, IR)
+   - Documented scope boundary (Task 11, non-monotone, F1=0.047)
+
+4. **Code quality**: Added docstring for `process_chunk()` existing_ids snapshot behavior
+
+### Key numbers:
+- **59 unit tests** in `test_incremental_pipeline.py` (was 48), all passing
+- **73 total tests** across both incremental test files, all passing
+- **$0 cost** — all experiments are deterministic simulations
+- **External reviewer concerns**: 0/3 → **3/3 addressed**

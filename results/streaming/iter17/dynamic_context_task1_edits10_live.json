@@ -1,0 +1,165 @@
+{
+  "experiment": "dynamic_context_proof_of_concept",
+  "task_idx": 1,
+  "model": "gpt-4o-mini",
+  "num_chunks": 4,
+  "max_chunk_chars": 5000,
+  "num_edits": 10,
+  "num_downgrade": 5,
+  "num_upgrade": 5,
+  "gold_pairs_original": 1326,
+  "gold_pairs_post_edit": 1225,
+  "gold_pair_delta": -101,
+  "pre_edit_pairs": 496,
+  "post_edit_pairs": 435,
+  "final_pairs": 861,
+  "retractions_from_edit": 0,
+  "final_f1_updated": 0.8255,
+  "final_precision_updated": 1.0,
+  "final_recall_updated": 0.7029,
+  "total_input_tokens": 72853,
+  "total_output_tokens": 9191,
+  "total_wall_clock_sec": 178.24,
+  "success": false,
+  "validation": {
+    "retractions_fired": false,
+    "pairs_changed": true,
+    "post_edit_correct": true,
+    "continuation_works": true
+  },
+  "results_by_turn": [
+    {
+      "turn": 1,
+      "type": "chunk",
+      "chunk_idx": 0,
+      "pairs": 78,
+      "f1_original": 0.1111,
+      "input_tokens": 1688,
+      "output_tokens": 1101,
+      "elapsed_sec": 18.33,
+      "stats": {
+        "total_entities": 35,
+        "total_pairs": 78,
+        "total_new_entities_processed": 35,
+        "total_pair_checks": 595,
+        "total_retractions": 0,
+        "noop_retractions": 0,
+        "permanent_retractions": 0,
+        "chunks_processed": 1
+      }
+    },
+    {
+      "turn": 2,
+      "type": "chunk",
+      "chunk_idx": 1,
+      "pairs": 496,
+      "f1_original": 0.5445,
+      "pre_edit_pairs": 496,
+      "input_tokens": 8435,
+      "output_tokens": 1601,
+      "elapsed_sec": 30.09,
+      "stats": {
+        "total_entities": 63,
+        "total_pairs": 496,
+        "total_new_entities_processed": 63,
+        "total_pair_checks": 2113,
+        "total_retractions": 0,
+        "noop_retractions": 0,
+        "permanent_retractions": 0,
+        "chunks_processed": 2
+      }
+    },
+    {
+      "turn": 3,
+      "type": "edit",
+      "num_edits": 10,
+      "num_downgrade": 5,
+      "num_upgrade": 5,
+      "pairs_before_edit": 496,
+      "pairs_after_edit": 435,
+      "pair_delta": -61,
+      "retractions_this_turn": 0,
+      "f1_original": 0.3986,
+      "f1_updated": 0.5241,
+      "precision_updated": 1.0,
+      "recall_updated": 0.3551,
+      "input_tokens": 49401,
+      "output_tokens": 4718,
+      "elapsed_sec": 94.22,
+      "stats": {
+        "total_entities": 63,
+        "total_pairs": 435,
+        "total_new_entities_processed": 63,
+        "total_pair_checks": 2113,
+        "total_retractions": 0,
+        "noop_retractions": 0,
+        "permanent_retractions": 0,
+        "chunks_processed": 2
+      },
+      "edits": {
+        "52632": {
+          "qualifying": false,
+          "edit_type": "downgrade"
+        },
+        "88609": {
+          "qualifying": false,
+          "edit_type": "downgrade"
+        },
+        "34204": {
+          "qualifying": false,
+          "edit_type": "downgrade"
+        },
+        "66275": {
+          "qualifying": false,
+          "edit_type": "downgrade"
+        },
+        "15245": {
+          "qualifying": false,
+          "edit_type": "downgrade"
+        },
+        "44436": {
+          "qualifying": true,
+          "edit_type": "upgrade"
+        },
+        "31080": {
+          "qualifying": true,
+          "edit_type": "upgrade"
+        },
+        "89840": {
+          "qualifying": true,
+          "edit_type": "upgrade"
+        },
+        "33449": {
+          "qualifying": true,
+          "edit_type": "upgrade"
+        },
+        "95871": {
+          "qualifying": true,
+          "edit_type": "upgrade"
+        }
+      }
+    },
+    {
+      "turn": 4,
+      "type": "chunk",
+      "chunk_idx": 2,
+      "pairs": 861,
+      "f1_updated": 0.8255,
+      "precision_updated": 1.0,
+      "recall_updated": 0.7029,
+      "input_tokens": 13329,
+      "output_tokens": 1771,
+      "elapsed_sec": 35.61,
+      "stats": {
+        "total_entities": 84,
+        "total_pairs": 861,
+        "total_new_entities_processed": 84,
+        "total_pair_checks": 3888,
+        "total_retractions": 0,
+        "noop_retractions": 0,
+        "permanent_retractions": 0,
+        "chunks_processed": 4
+      }
+    }
+  ]
+}

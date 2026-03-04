@@ -1,0 +1,16 @@
+The critique has been written to `docs/exchanges/critique_latest.md`. Here's a summary of the key points:
+
+## Critique Summary (Iteration 14)
+
+**Status**: CONTINUE
+
+**Scores**: Novelty 7.5 (+0.5), Technical Soundness 8.5 (unchanged), Benchmark Performance 6.5 (-1.5), Scalability 6.5 (+0.5), Research Maturity 7.5 (unchanged)
+
+**The One Big Thing**: **Run the full-corpus experiment** (Task 1, k=5, ~19K chars/chunk, 96K total). Cost: $0.50-1.00. This transforms the paper from "we save 80% of tokens but only find 32% of pairs" to "we save 80% of tokens while finding 90%+ of pairs."
+
+**Key findings**:
+1. **CRITICAL GAP is resolved** — Condition D comparison is strong and reproducible
+2. **Dynamic context POC is a good step** but needs a no-retraction counterfactual (zero cost) to quantify the retraction mechanism's VALUE, not just show it fires
+3. **The `apply_edits()` method should be promoted to IncrementalState** — currently the dynamic edit path bypasses the framework entirely
+4. **Benchmark Performance downgraded** because absolute F1≈0.32 on a task with oracle F1=1.0 is a presentation problem that the full-corpus run would fix
+5. **5 code issues identified** including the edit path bypassing process_chunk(), gold pair computation not using real task conditions, and Table 8 F1 inconsistency between simulation and live API

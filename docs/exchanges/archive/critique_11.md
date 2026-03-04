@@ -2,234 +2,195 @@
 
 STATUS: CONTINUE
 
----
-
 ## Overall Assessment
 
-Iteration 10 delivered its commitments cleanly: label-aware check_pair is implemented and ran, prune_count telemetry is confirmed working (0→1 transition at Turn 4 matches token evidence), and the AST scope fix for `_extract_assigned_names` is correct. The P=1.0 finding — zero false positives across all turns and conditions under actual task conditions — is the paper's strongest empirical result and is publishable as-is. However, close inspection of `label_aware_task1_results.json` against `split_context_by_users()` reveals two previously unidentified issues that structurally compromise the core A/C comparison: (1) Conditions A and C are evaluated on **different slices of the labeled corpus** — A samples shallowly across all 96K chars while C covers the first 25K contiguously — making their F1 comparison neither fair nor interpretable as "same budget, different strategies"; and (2) in Turn 1 the model advanced `chunks_processed` to 2 (processing a phantom chunk 1 with empty entities alongside chunk 0), causing Turn 2 to be non-compliant by deduplication. Together, these mean the F1=0.1695 vs F1=0.3424 comparison (49.5% of oracle) cannot yet be cited as the paper's headline without a targeted experiment redesign.
-
----
+The project has reached a significant milestone: the full-corpus live API experiment (Exp 49) delivers F1=1.0 for both incremental and full-recompute at 84% token savings, 81% cost savings, and 65% wall-clock speedup. This is a strong headline result. The separated counterfactual (Exp 50) cleanly attributes retraction's value at 68% of F1 protection. The architecture is sound, `apply_edits()` is properly integrated with tests, and all 195 tests pass. However, this is still a **single-run, single-model, single-task** result at full corpus scale, and the paper needs robustness evidence before the claim "F1=1.0 at 84% savings" is credible to reviewers.
 
 ## Reflection on Prior Feedback
 
 **Resolved — not re-raising:**
-- Label-aware check_pair implemented and run. Done.
-- prune_count telemetry confirmed via direct attribute access; 0→1 at Turn 4. Done.
-- `_extract_assigned_names` uses `tree.body` not `ast.walk()`. Fixed and unit-tested. Done.
-- `EntityCache.get_from_chunk()` docstring corrected; `get_new_in_chunk()` added. Done.
-- `PairTracker.clear_retracted()` method added. Done.
-- `_build_iteration_summary` chunk_index tracking via `_PROCESS_CHUNK_RE`. Done.
-- Condition B token anomaly attributed to ORACLE_PROMPT_SINGLE template. Accepted.
+- Full-corpus live API run (Critique 14 "One Big Thing"). DONE spectacularly — F1=1.0.
+- No-retraction counterfactual (Critique 14 #2). DONE — 620 invalid pairs at 96K, 10 edits.
+- `apply_edits()` library method (Critique 14 #3). DONE — implemented with 7 tests.
+- Separated counterfactual (Critique 14 implied). DONE — clean 3-way ablation.
+- Full-corpus counterfactual at scale (Critique 14 #4 partial). DONE.
+- Code issues (docstrings, Gemini test, chunk comment). All fixed.
 
-**Pushback accepted:** The critique's prediction that "F1 should rise toward 0.716" conflated proxy-condition ceiling (0.716) with actual-task ceiling at 25K labeled chars (0.3424). Researcher is correct. The proxy ceiling is not the actual ceiling. This point is dropped.
-
----
+**Pushbacks accepted — not re-raising:**
+- Cross-model validation deferred. Accepted as documented limitation.
+- `PairTracker._retracted` unbounded growth with `clear_retracted()`. Accepted.
 
 ## Scores
 
 | Criterion | Score | Delta | Comment |
 |-----------|-------|-------|---------|
-| Novelty | 7/10 | +0 | P=1.0, REPL-state-as-correctness-ground-truth, and retraction taxonomy are genuinely novel. However, novelty claims rest on a comparison that has a coverage non-equivalence flaw. Fix the experiment first, then the novelty claims are independently defensible. |
-| Technical Soundness | 6/10 | −1 | New: Conditions A and C see different 25K-char slices of the 96K labeled corpus (A: breadth across full corpus; C: depth in first 25K). This is a structural correctness issue in the experiment design, not a minor bug. The comparison as reported is not internally valid. |
-| Benchmark Performance | 6/10 | −1 | F1=0.1695 (A) vs 0.3424 (C) gives "49.5% of oracle," but this comparison is confounded by coverage non-equivalence. Condition A likely achieves substantially higher F1 when redesigned with sequential chunks from the same first 25K chars. Cannot cite 49.5% honestly without the fix. |
-| Scalability | 6/10 | +0 | N=231, 3 tasks, 1 model. Turn 1 phantom-chunk behavior (model processes 2 chunks in one turn) is uncharacterized and could worsen at higher k. |
-| Research Maturity | 7/10 | +0 | P=1.0 is paper-worthy. The A/C comparison needs one targeted experiment redesign. With that fix, this moves to 8/10. |
-
----
+| Novelty | 8/10 | +0.5 | Full-corpus live result makes the efficiency story compelling. Separated counterfactual is a genuine contribution (clean precision/recall attribution for retraction). Still single-domain. |
+| Technical Soundness | 8.5/10 | +0 | `apply_edits()` is well-implemented with good tests. `process_chunk()` architecture remains solid. No new bugs found. BUT headline result is n=1 (see below). |
+| Benchmark Performance | 8.5/10 | +2.0 | F1=1.0 at 96K chars with 84% savings is a dramatic improvement from F1=0.32 at 25K. This is now a publishable result. Downgrading from 9 because it's a single run. |
+| Scalability | 6.5/10 | +0 | Everything is still gpt-4o-mini on OOLONG-Pairs Task 1 at full corpus. No cross-model, no cross-task at full corpus, no evidence of behavior at 200K+ chars. |
+| Research Maturity | 8/10 | +0.5 | 11 documented contributions, paper-ready tables, fair comparison, clean ablation. Close to submission but needs multi-run stability at full corpus. |
 
 ## Architecture Review
 
-### Critical New Finding 1: Data Slice Non-Equivalence Invalidates the A/C Comparison
+### Core Architecture Remains Strong
 
-Inspecting `split_context_by_users()` (lines 100–124 of `eval/rlm_pipeline_experiment.py`) and the label-aware results together reveals a fundamental mismatch between what Conditions A and C actually process.
+Reviewed `rlm/core/incremental.py` end-to-end (646 lines). The code is clean and well-documented:
+- `process_chunk()` with monotone merge, idempotency guard, deduplication — all correct.
+- `apply_edits()` correctly handles the 3-phase pipeline (retract → re-evaluate → discover new).
+- Partner cleanup in `retract_entity()` prevents double-counting.
+- 7 `apply_edits` tests cover downgrade, upgrade, mixed, telemetry, no-op re-add, overlapping edits, and upgrade-only discovery.
 
-The labeled context is **96,689 characters** — roughly 3× the plain context — because each record gains a `|| Label: [cat]` field. When `split_context_by_users(labeled_context, num_chunks=5)` runs:
+### Chunk Boundary Behavior at 19K chars/chunk
 
-1. It finds all user-boundary positions across the 96K corpus (231 positions)
-2. Divides into 5 groups of ~46 users each, giving ~19K chars per group
-3. Each group is truncated to `max_chunk_chars=5000`
+At 19K chars/chunk, entity data can be split across chunk boundaries — some lines of user X in chunk i, remaining lines in chunk i+1. The `monotone_attrs={"qualifying"}` merge correctly preserves qualifying=True from earlier chunks, so this doesn't affect correctness. But the paper should note this: reviewers may ask "what happens at chunk boundaries?" The answer is "monotone merge handles it," which is actually a strength of the architecture worth highlighting.
 
-**Condition A's five chunks therefore cover**:
-- Chunk 0: chars ~0–5K (first 5K of users 1–46)
-- Chunk 1: chars ~19K–24K (first 5K of users 47–92)
-- Chunk 2: chars ~38K–43K (first 5K of users 93–138)
-- Chunk 3: chars ~57K–62K (first 5K of users 139–185)
-- Chunk 4: chars ~76K–81K (first 5K of users 186–231)
+### Full-Corpus Experiment Architecture
 
-**Condition C's oracle covers**: `labeled_context[:25000]` — the first 25K chars of the corpus, which spans roughly users 1–60 and overlaps only with Chunk 0 (and slightly into the beginning of Chunk 1's region).
-
-These are **entirely different slices**. Condition A covers all 231 users shallowly (5K chars per user group). Condition C covers ~60 users deeply (all their instances within the first 25K chars). The two conditions have **different coverage ceilings** — not the same 1,653 pairs.
-
-The observed numbers confirm this mechanically:
-- Condition C: 113 entities, 58 qualifying, 1,653 pairs (all from chars 0–25K)
-- Condition A: 741 pairs from 5 disjoint windows across the 96K corpus
-
-The "49.5% of oracle" headline is therefore a comparison of two different tasks, not two different strategies on the same data. Reviewers who inspect the chunking logic will catch this immediately.
-
-**The fix requires one code change** in `run_label_aware_condition_a()`:
-
-```python
-# CURRENT (wrong): split full 96K corpus into 5 user groups, truncate each to 5K
-chunks = split_context_by_users(labeled_context, num_chunks)
-chunks = [c[:max_chunk_chars] for c in chunks]
-
-# FIXED: split only the first 25K chars into 5 sequential windows
-context_window = labeled_context[:num_chunks * max_chunk_chars]   # same 25K as oracle C
-step = max_chunk_chars  # 5000
-chunks = [context_window[i*step : (i+1)*step] for i in range(num_chunks)]
-```
-
-With this fix, A and C see identical content and the comparison measures exactly what it claims: incremental streaming vs single-pass oracle on the same data.
-
-### Critical New Finding 2: Turn 1 Phantom Chunk (Model Processes Two Chunks in One Turn)
-
-From the actual `label_aware_task1_results.json`:
-
-| Turn | Prompt chunk_idx | chunks_processed after | Compliant (current check) |
-|------|-----------------|----------------------|--------------------------|
-| 1 | 0 | **2** | True (wrong: jumped by 2) |
-| 2 | 1 | 2 | False (dedup blocked) |
-| 3 | 2 | 3 | True |
-| 4 | 3 | 4 | True |
-| 5 | 4 | 5 | True |
-
-Turn 1's `pair_checks_total=1,907` at `chunks_processed=2` reveals the model ran `process_chunk(0, entities, ...)` AND `process_chunk(1, {}, ...)` in consecutive REPL iterations within a single completion. The second call created chunk_idx=1 in `_processed_chunk_indices` with empty entities. When Turn 2 arrived with chunk 1's actual data and called `process_chunk(1, entities, ...)`, the deduplication guard returned cached stats (empty) and the incremental state for chunk 1 was permanently polluted with zero entities.
-
-The current compliance metric `chunks_processed > prev_chunks_processed` accepts a jump of 2 as compliant. The correct metric is `chunks_processed == prev_chunks_processed + 1`. Under the correct metric, **Turn 1 is also non-compliant** (advanced by 2), giving a true compliance rate of **60%** (Turns 3, 4, 5 correctly advance by exactly 1), not the reported 80%.
-
-Additionally, chunk 1's real data was **never processed** — the incremental state has 0 entities for chunk 1. This artificially reduces Condition A's coverage and F1. The total pairs found (741) would be higher if chunk 1 had been processed correctly.
-
-This is a prompt engineering issue: `max_iterations=6` lets the model call `process_chunk` with arbitrary chunk indices across REPL iterations. The fix is to restrict the template: add "Call `_incremental.process_chunk({chunk_idx}, entities, pair_checker=check_pair)` EXACTLY ONCE. Do not call process_chunk with any other chunk index in this turn."
-
-### Finding 3: Turn 4 Token Spike (45,275 tokens) — Still Mechanistically Unexplained
-
-prune fired at Turn 4 (prune_count: 0→1), yet input tokens jumped from 4,564 (Turn 3) to **45,275** (Turn 4), then dropped to 6,819 (Turn 5). Pruning should reduce history and thus reduce tokens. The 10× spike is the opposite.
-
-Two hypotheses:
-1. **Many LM iterations within Turn 4**: If Turn 4 ran 6 LM iterations (max_iterations=6) while Turn 3 ran ~2, total token usage is 3× higher even if each individual call is smaller. `_extract_tokens()` aggregates across all iterations in a completion.
-2. **The prune summary itself is large**: `_build_iteration_summary()` could produce a large summary if many code blocks and outputs are included, partially or fully offsetting the compression.
-
-`run_label_aware_condition_b()` has `iteration_count_proxy = 0` that is never populated — the promised per-completion iteration logging was not implemented. This is a code gap that must be closed to resolve the spike.
-
----
+`eval/full_corpus_and_counterfactual.py` is well-structured. The `run_full_corpus_live` path correctly delegates to `run_condition_a_v4` and `run_condition_d_full_recompute`. The chunking logic (lines 462-466) handles remainder distribution to the last chunk.
 
 ## Novelty Assessment
 
-### Defend These — They're Independently Robust
+### What's Genuinely Novel (Strong — Paper-Ready)
 
-**P=1.0 (zero false positives)**: This holds regardless of the A/C coverage non-equivalence. Every predicted pair in Condition A was a true gold pair at every turn. This is a precision guarantee that survives the experiment redesign — the data slice changes which pairs are available but doesn't change whether the label-aware checker is correct. This should be the lead result.
+1. **IncrementalState as a reusable library** with entity cache + pair tracker + retraction: clean, tested, and now with `apply_edits()` for dynamic context.
+2. **P=1.0 across ALL runs, all turns, all tasks, all scales**: Zero false positives from structured decomposition. This is the paper's most surprising and robust finding.
+3. **F1=1.0 at 84% token savings**: The headline result. Equal quality at 5.2× lower cost.
+4. **Separated counterfactual ablation**: Clean attribution — retraction protects precision (68%), new pair discovery protects recall (32%). This is a methodological contribution.
+5. **Library-vs-template design principle**: V3→V4 showing that invariants belong in library code (deterministic compliance) vs LLM prompts (stochastic compliance). Broadly useful insight.
 
-**REPL-state as correctness ground truth**: The deduplication guard in `_processed_chunk_indices` provides O(1) idempotency. Turn 2's non-compliance (dedup blocked the phantom chunk from being re-processed correctly) and the post-pruning continuity at Turn 4–5 both confirm that REPL-level Python state is the ground truth, not message history. This architectural insight generalizes beyond OOLONG-Pairs.
+### What's Missing for Maximum Novelty
 
-**Retraction taxonomy and temporal asymmetry**: The 44–15,824 range (360×) in retraction counts across task types, mechanistically confirmed for temporal asymmetry (bidirectional vs monotonic invalidation), is empirically original. No prior work characterizes incremental computation overhead as a function of constraint type.
+6. **No cross-task result at full corpus**: Tasks 3 and 6 are validated at 25K (F1≈0.32) but NOT at full corpus. A reviewer will ask: "Does F1=1.0 hold for other tasks, or is Task 1 uniquely easy?" This is the most impactful missing data point after multi-run stability.
+7. **No multi-run stability at full corpus**: The 25K experiments have 5-run stability (σ=0.004). The 96K headline result is n=1. If F1=1.0 is fragile (drops to 0.85 on a bad run), the headline is misleading.
 
-### What the Redesigned Experiment Adds
+## 3rd-Party Clarity Test
 
-With sequential chunking, the A/C comparison becomes:
-- Same 25K chars, same entities, same qualifying set (58 users), same ceiling (1,653 pairs)
-- F1 gap measures only: latency (A sees data incrementally, C sees all at once) + inter-chunk accumulation effects
-- If A achieves ≥ 0.28 F1 (≥80% of oracle): strong headline (near-oracle streaming quality)
-- If A achieves ~0.22 F1 (same as current k=1): reveals that per-chunk coverage (not total coverage) is the binding constraint, and increasing chunk size is more valuable than increasing k
+### Table 11 (Full-Corpus Live, A vs D): ✅ PASSES — STRONG
 
-Either result is a finding. The P=1.0 guarantee is the novelty; the F1 level quantifies the coverage-vs-accuracy tradeoff.
+A skeptical engineer reads: "Both conditions use the same IncrementalState framework. A processes each 19K-char chunk once. D resets and replays all chunks 1..k on each turn. F1=1.0 for both. A uses 38K tokens; D uses 236K tokens." Clear, fair, meaningful. The wall-clock comparison (174s vs 500s) adds practical impact.
 
----
+**Minor improvement**: Add a "per-turn token breakdown" showing D's quadratic growth (Turn 5 = 107K) vs A's flat profile (Turn 5 = 4.6K). This makes the O(k²) vs O(k) claim visually obvious.
+
+### Table 12 (Separated Counterfactual): ✅ PASSES
+
+Three conditions are clearly defined and mutually exclusive. Attribution math is transparent. A skeptical reader can verify: F1(full) - F1(retract-only) = recall contribution; F1(retract-only) - F1(neither) = precision contribution.
+
+### Table 13 (Full-Corpus Counterfactual): ✅ PASSES
+
+Clear "with vs without" comparison. 620 invalid pairs at 96K vs 240 at 25K demonstrates retraction scales with corpus size.
+
+### Headline Result (F1=1.0): ⚠️ PARTIAL PASS — n=1 Problem
+
+**Blocking issue**: The headline claim "F1=1.0 at 84% token savings" is based on a SINGLE API run. At 25K, the researcher demonstrated σ=0.004 across 5 runs. But we don't know the variance at 96K. If one unlucky run produces F1=0.92 (due to a single non-compliant turn at 19K chars), the headline claim collapses.
+
+The fix is trivial: run the full-corpus A condition 2 more times (cost: ~$0.02). If all 3 runs hit F1=1.0, the claim is solid. If variance appears, report it honestly — F1=0.98±0.02 at 84% savings is still excellent.
+
+### Per-Turn Token Growth (D): ✅ PASSES BUT UNDEREXPLOITED
+
+D's per-turn breakdown shows exactly the predicted O(k²) pattern:
+- Turn 1: 37K tokens
+- Turn 5: 107K tokens (2.9× growth)
+
+This should be a FIGURE in the paper, not buried in a table. A log-scale plot of D's cumulative tokens vs A's flat profile is the single most visually compelling evidence for the incremental advantage.
 
 ## Experiment Critique
 
-### Priority 1: Redesigned A/C Label-Aware (Mandatory, ~$5, 2 hrs)
+### What's Solid
+1. **Full-corpus live A vs D**: Fair head-to-head, identical F1, 84% savings. Publication-grade.
+2. **Separated counterfactual**: Clean 3-way ablation with transparent attribution.
+3. **`apply_edits()` tests**: 7 tests covering edge cases including overlapping edits.
+4. **Full experimental pipeline**: simulation → live API → counterfactual → ablation. Methodical.
 
-The single experiment that resolves the paper's central claim. Change `run_label_aware_condition_a()` to use sequential 5K windows from the same first 25K labeled chars that oracle C sees. Simultaneously:
-- Fix the compliance metric to `chunks_processed == prev_chunks_processed + 1`
-- Add phantom-chunk detection: warn if `chunks_processed > prev_chunks_processed + 1`
-- Add per-completion iteration count: log `len(completion.iterations)` or equivalent
-- Add the one-sentence prompt fix to prevent phantom chunk calls
-- Rerun all three conditions (A, B, C) for Task 1
+### What's Missing (in priority order)
 
-Expected outcome: Condition A F1 improves substantially. If P=1.0 still holds (expected, since the checker is correct regardless of data slice), the paper has: "Incremental RLM achieves P=1.0 and F1=[X]% of oracle on Task 1, processing the same 25K-char context as oracle in 5 streaming turns of 5K chars each."
+1. **Multi-run stability at full corpus (HIGH — ~$0.02, 30 min)**
+   - Run full-corpus A condition 2-3 more times
+   - Report mean ± std for F1, tokens, wall-clock
+   - If F1=1.0 is stable (σ=0), state "F1=1.000 across N=3 runs"
+   - If variance exists, report honestly: "F1=X±Y"
 
-### Priority 2: Tasks 3 and 6 Label-Aware with Sequential Chunking (~$8, 3 hrs)
+2. **Full-corpus Tasks 3 and 6 (MEDIUM — ~$0.10, 1 hr)**
+   - Cross-task validation removes "Task 1 is uniquely easy" concern
+   - Task 3 had compliance issues at 5K/chunk. Does 19K/chunk help or hurt?
+   - Expected: similar savings pattern, possibly F1 < 1.0 (Task 3's selectivity is lower)
 
-Not yet run. Apply the same sequential-chunk redesign. Task 3 (~70% qualifying entities) should yield higher F1 and may push "X% of oracle" into a more impressive range. If P=1.0 holds for all three tasks, the paper can claim: "The incremental protocol achieves zero false positives across tasks and turns."
+3. **Per-turn token comparison figure ($0, 15 min) — MEDIUM**
+   - Plot A's per-turn input_tokens (flat ~6K) vs D's (growing to 107K)
+   - This IS the visual proof of O(k) vs O(k²) — should be Figure 1 or 2 in the paper
 
-### Priority 3: Full-Context Oracle (~$2, 1 API call)
-
-Run Condition C on all 96,689 labeled chars (not just 25K). Expected F1 approaches 1.0 (all 231 users visible, all qualifying pairs findable). This establishes the definitive coverage ceiling and anchors the 25K-window F1 (0.3424) as a coverage fraction: "At 25K chars, the oracle achieves 20.7% of all pairs (1,653/8,001). Our incremental approach achieves [Y]% of the same ceiling with the same budget."
-
----
+4. **Cross-model spot check (~$0.50, 30 min) — LOW-MEDIUM**
+   - Full-corpus Task 1, k=5 with gpt-4o (single run)
+   - Even P=1.0 + F1=0.95 with similar savings would be sufficient
 
 ## The One Big Thing
 
-**Redesign the Condition A chunking to use sequential 5K windows from the same first 25K labeled chars that Condition C (oracle) sees.** This is a ~10-line code change. Everything else in Iteration 11 is secondary to this. Without it, the paper's core A/C comparison is not internally valid and cannot be published. With it:
+**Run 2 more full-corpus A replicates to confirm F1=1.0 is stable (not a lucky n=1).**
 
-1. The coverage ceilings for A and C become identical
-2. Condition A's F1 likely improves substantially from 0.1695
-3. P=1.0 still holds (the label-aware checker is correct independently of data slice)
-4. The "X% of oracle" headline becomes a clean claim about streaming vs single-pass processing
+Cost: ~$0.02. Time: ~30 minutes. This converts the headline from "we observed F1=1.0" (anecdotal) to "F1=1.000 ± 0.000 across 3 runs" (statistical). Without this, any reviewer can dismiss the result as cherry-picked.
 
-The phantom-chunk fix (one sentence added to the prompt template) and the compliance-metric correction (strict `==` instead of `>`) should be applied simultaneously — both take under 30 minutes and are prerequisite to interpreting any compliance numbers correctly.
-
----
+The 25K experiments showed σ=0.004 across 5 runs, so stability is likely — but "likely" is not "demonstrated." At 19K chars/chunk, a single non-compliant turn could drop F1 below 1.0, and we need to know the probability of that happening.
 
 ## Specific Experiments to Run
 
-1. **Redesigned A/C label-aware, sequential chunking, Task 1 (mandatory, ~$5, 2 hrs)**:
-   - Replace `split_context_by_users(labeled_context, 5)` + per-chunk truncation with sequential 5K windows from `labeled_context[:25000]`
-   - Fix compliance check: `chunks_processed == prev_chunks_processed + 1` (not `>`)
-   - Add phantom-chunk warning when delta > 1
-   - Add per-completion iteration count logging to diagnose Turn 4 token spike
-   - Add to prompt template: "Call `_incremental.process_chunk({chunk_idx}, entities, pair_checker=check_pair)` EXACTLY ONCE with chunk_idx={chunk_idx}. Do not call process_chunk with any other chunk index."
-   - Run all three conditions and record F1 alongside prune_count and iteration_count
+1. **Multi-run full-corpus stability (~$0.02, 30 min) — HIGHEST**
+   - Run `eval/full_corpus_and_counterfactual.py --full-corpus-live --task 1 --k 5` 2 more times
+   - Record F1, tokens, wall-clock, compliance for each run
+   - Report mean ± std
+   - If any run has compliance failure, document and analyze
 
-2. **Tasks 3 and 6 with sequential chunking (~$8, 3 hrs)**:
-   - Apply same sequential-chunk design
-   - Report P, R, F1 per condition per task
-   - If P=1.0 for all tasks: generalization claim is supported
+2. **Full-corpus Tasks 3 and 6 (~$0.10, 1 hr) — HIGH**
+   - `--full-corpus-live --task 3 --k 5` and `--full-corpus-live --task 6 --k 5`
+   - Cross-task validation removes "Task 1 is uniquely easy" concern
+   - Expected: P=1.0, similar savings, F1 may vary by task selectivity
 
-3. **Full-context oracle on all labeled chars (~$2, 30 min)**:
-   - Run Condition C with `max_chars=len(labeled_context)` (~96K)
-   - Anchors the F1 ceiling definitively
-   - One-sentence result: "Oracle on full labeled corpus achieves F1=[Z]≈1.0, confirming the label-aware checker is correct and coverage is the only limiting factor"
+3. **Per-turn token comparison figure ($0, 15 min) — MEDIUM**
+   - Extract per-turn `input_tokens` from the Exp 49 JSON for both A and D
+   - Plot as a simple line chart (matplotlib)
+   - Caption: "Incremental (A) maintains constant per-turn token usage while full-recompute (D) grows linearly with turn number"
 
-4. **Resolve Turn 4 token spike by logging per-completion iteration count (free, 20 min)**:
-   - Inspect `rlm._persistent_env.locals` or add `rlm._lm_call_count` instrumentation
-   - Confirm whether Turn 4 used 6 LM iterations while other turns used 2
-   - If confirmed: "Token cost per turn is iteration-count-dependent; the 45K spike at Turn 4 reflects 6 LM iterations triggered by history pruning generating a complex summary context"
-
-5. **Emit per-chunk coverage count in Condition A output (free, 10 min)**:
-   - After each turn, print `qualifying_this_chunk = sum(1 for e in entities.values() if e.get('qualifying'))` and `entities_total_so_far = len(_incremental.entity_cache)`
-   - With sequential chunking, this will confirm whether qualifying entities accumulate monotonically across turns (expected: yes, since all 5 chunks now cover the same 25K chars as oracle C)
-
----
+4. **Cross-model spot check (~$0.50, 30 min) — LOW-MEDIUM**
+   - Full-corpus Task 1, k=5 with gpt-4o (single run)
+   - Addresses the "gpt-4o-mini-specific" concern
 
 ## Code Issues Found
 
-1. **`run_label_aware_condition_a()` compliance check is too permissive** (`eval/label_aware_experiment.py`, line 303):
+1. **`apply_edits()` missing `_total_pair_checks` tracking**:
+   In `process_chunk()`, every pair check increments `self._total_pair_checks`. But `apply_edits()` doesn't track pair checks at all — neither Phase 2 (re-evaluate retracted) nor Phase 3 (new pair discovery) increment `_total_pair_checks`. This means `get_stats()["total_pair_checks"]` underreports when `apply_edits()` is used. Fix:
    ```python
-   # CURRENT (wrong — accepts phantom-chunk jump of 2 as compliant):
-   compliant = chunks_processed > prev_chunks_processed
-   # CORRECT:
-   compliant = chunks_processed == prev_chunks_processed + 1
+   # Add a pair_checks counter in apply_edits:
+   pair_checks = 0
+   # Phase 2: count each re-evaluation
+   for p in all_retracted:
+       pair_checks += 1
+       ...
+   # Phase 3: count each new pair check
+   for eid in edited_ids:
+       for other_id in self.entity_cache.get_ids():
+           if other_id == eid: continue
+           if self.pair_tracker.has_pair(eid, other_id): continue
+           pair_checks += 1
+           ...
+   self._total_pair_checks += pair_checks
+   # Add to return dict: "pair_checks": pair_checks
    ```
-   The current check accepts any positive increase, including jumps of 2. The strict check enforces exactly one new chunk per turn.
+   This is a telemetry gap, not a correctness bug — but it would cause confusion if someone compares `get_stats()` between runs.
 
-2. **`run_label_aware_condition_b()` declares `iteration_count_proxy = 0` but never populates it** (`eval/label_aware_experiment.py`, line 442):
-   The variable is set and never assigned or logged. The Turn 4 token spike investigation requires per-completion iteration counts. This is dead code.
+2. **`select_entities_to_edit()` iterates unsorted dicts** (carried over from Critique 14, not addressed):
+   In `eval/dynamic_context_experiment.py`, `qualifying.items()` iteration depends on insertion order. For reproducibility across different Python environments:
+   ```python
+   for i, (uid, attrs) in enumerate(sorted(qualifying.items())):
+   ```
 
-3. **`split_context_by_users()` is not suitable for labeled context without `max_context_chars` parameter** (`eval/rlm_pipeline_experiment.py`, line 100):
-   The function splits across the full input, which is fine for ~32K plain context (5K/chunk ≈ 16% coverage per chunk) but produces disjoint 5K windows across 96K labeled context (≈5% coverage per chunk). A `max_context_chars` parameter would make the caller's intent explicit and prevent silent slicing across the wrong range.
+3. **`compute_gold_pairs_with_edits()` doesn't use `_check_pair_condition()`** (carried over from Critique 14):
+   Uses a simplified qualifying check instead of the real task condition. Fine for Task 1 but would produce wrong gold pairs for asymmetric tasks. Add a `# TODO` comment.
 
-4. **`CHUNK_PROMPT_LABEL_AWARE` does not restrict model to exactly one `process_chunk` call** (`eval/label_aware_experiment.py`, line 119):
-   The template says "Run this code (chunk index {chunk_idx})" but does not say "EXACTLY ONCE." The model can and does call `process_chunk` with other chunk indices in subsequent REPL iterations, causing the Turn 1 phantom chunk behavior.
-
-5. **History manager lacks per-completion LM call counter** (`rlm/core/history_manager.py`):
-   `_prune_count` tracks pruning events; there is no analogous `_total_lm_iterations` counter. The Turn 4 spike requires this to be explained. Add `self._total_lm_calls: int = 0` and increment in `RLM.completion()` for each LM call (or expose the completion's iteration count via `UsageSummary`).
-
----
+4. **No `--seed` or `temperature` parameter for live API experiments**:
+   `full_corpus_and_counterfactual.py` doesn't expose temperature control. For multi-run stability testing, adding `temperature=0` as an option would distinguish model stochasticity from protocol fragility. This is a ~3-line change in the experiment runner.
 
 ## Acknowledged Limitations
 
-- All label-aware experiments use a single OOLONG-Pairs corpus (N=231, 1 domain, 1 model: gpt-4o-mini). Cross-domain generalization is unverified and cannot be fixed without additional resources. Scope as "proof-of-concept on OOLONG-Pairs."
-- The σ-parameterized cost model (R²=0.936, p=0.025) is fitted on 35 datapoints from one corpus. Report as empirical approximation; the modest F-statistic and single-corpus origin prevent stronger claims.
-- The "dynamic benchmark" is a static dataset chunked artificially. Accepted scoping decision. Frame as "sequential context revelation" with streaming as future work.
-- History pruning's correctness guarantee via the deduplication guard is empirically observed but not formally proven. One clear paragraph in the paper suffices; a formal proof is out of scope.
+- Single model (gpt-4o-mini), single corpus (OOLONG-Pairs). Accepted as proof-of-concept scope.
+- All counterfactuals use synthetic hand-crafted edits. Real-world edit distributions would be less predictable.
+- The "dynamic context" story is validated through counterfactual simulation, not a real multi-turn conversation with genuine context evolution. The paper should be clear about what's demonstrated (mechanism correctness) vs what's hypothesized (production applicability).
+- Non-monotone tasks (Task 11) show F1=0.047. Documented scope boundary.
+- The structural savings formula 1-2/(k+1) applies to pair-check counts, not total system tokens. The live API shows system token savings (84%) exceed structural pair-check savings (64%) due to D's prompt overhead — frame the formula as a LOWER BOUND on actual savings.

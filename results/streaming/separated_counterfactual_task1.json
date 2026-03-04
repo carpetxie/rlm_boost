@@ -1,0 +1,62 @@
+[
+  {
+    "num_edits": 5,
+    "num_downgrade": 2,
+    "num_upgrade": 3,
+    "gold_post_edit": 1326,
+    "full": {
+      "pairs": 1275,
+      "invalid": 0,
+      "missing_new": 0,
+      "precision": 1.0,
+      "recall": 0.9615,
+      "f1": 0.9804
+    },
+    "retract_only": {
+      "pairs": 1176,
+      "invalid": 0,
+      "missing_new": 102,
+      "precision": 1.0,
+      "recall": 0.8869,
+      "f1": 0.94
+    },
+    "neither": {
+      "pairs": 1275,
+      "invalid": 99,
+      "missing_new": 102,
+      "precision": 0.9224,
+      "recall": 0.8869,
+      "f1": 0.9043
+    }
+  },
+  {
+    "num_edits": 10,
+    "num_downgrade": 5,
+    "num_upgrade": 5,
+    "gold_post_edit": 1176,
+    "full": {
+      "pairs": 1128,
+      "invalid": 0,
+      "missing_new": 0,
+      "precision": 1.0,
+      "recall": 0.9592,
+      "f1": 0.9792
+    },
+    "retract_only": {
+      "pairs": 1035,
+      "invalid": 0,
+      "missing_new": 100,
+      "precision": 1.0,
+      "recall": 0.8801,
+      "f1": 0.9362
+    },
+    "neither": {
+      "pairs": 1275,
+      "invalid": 240,
+      "missing_new": 100,
+      "precision": 0.8118,
+      "recall": 0.8801,
+      "f1": 0.8446
+    }
+  }
+]

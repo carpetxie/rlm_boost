@@ -2,233 +2,254 @@
 
 STATUS: CONTINUE
 
----
-
 ## Overall Assessment
 
-Iteration 12 produced the project's most significant result: with the 2-line monotone attribute fix, A/C ratio jumps from 64.3% → 94.3%, reframing the paper's central narrative from "structural limitation explains 40% gap" to "correct protocol nearly eliminates gap." This is a stronger contribution. However, the 94.3% headline rests on a single 100%-compliant run (Run 2); Run 1 at 60% compliance produced only 69.5% A/C and a **4.84× token overhead** — confirming that REPL template complexity drives stochastic compliance failure and wildly inflates cost. The library-level `monotone_attrs` fix is not optional engineering polish — it is the prerequisite for every remaining experiment in this paper. Without it, the k-sensitivity sweep, Tasks 3/6 V3, and any multi-seed stability claim are unreliable.
-
----
+The research has reached a strong position: full-corpus simulation demonstrates F1≈1.0 with 64% pair-check savings (matching the structural formula within 3pp), the no-retraction counterfactual provides compelling evidence that retraction is essential (precision drops to 0.81 with 10 edits), and `apply_edits()` makes the dynamic context claim architecturally honest. The **single most important remaining gap** is the absence of a **live API full-corpus run** — the simulation proves pair-check savings but does NOT prove token savings or LLM compliance at ~19K chars/chunk. This is a $1 experiment that transforms the paper from "simulation shows F1=1.0" to "live LLM achieves F1≈1.0 with 77-86% token savings."
 
 ## Reflection on Prior Feedback
 
 **Resolved — not re-raising:**
-- Attribute-overwriting bug (Critique 12). Fixed in REPL template (V3). Ablation complete (Experiment 31). Done.
-- Double-counting in `updated × all` sweep. Fixed via `checked_in_updated_sweep` deduplication. Done.
-- Missing `reset()` method. Implemented. Done.
-- Condition B using wrong system prompt. Fixed in `run_condition_b_v3()`. Done.
-- Coverage ceiling formula asymmetric-task guard. Comment added. Done.
-- Phantom chunk / compliance metric. Fixed in V2. Note: V3 Run 1 still produced a phantom chunk at Turn 2 — this is the compliance fragility being raised below, not the metric bug.
+- Full-corpus F1 presentation problem (F1=0.32 → F1=1.0 in simulation). Done.
+- No-retraction counterfactual (precision 1.0 → 0.81 without retraction). Done.
+- `apply_edits()` library method. Implemented with 5 tests. Done.
+- Sorted dict iteration fix in `select_entities_to_edit()`. Done.
+- Superlinear retraction reframing. Researcher agrees, will reframe. Done.
+- Fair Condition D vs A comparison across 3 tasks. Done (77-86% savings, 100% quality). Done.
+- Multi-run stability (5 runs k=5, σ=0.004). Done.
+- k-sensitivity sweep. Done.
+- Library-level monotone_attrs. Done.
+- Structural savings formula. Done.
 
-**Pushbacks accepted — not re-raising:**
-- Lazy evaluation as next architectural step. Correctly deferred post-A2. With A/C = 94.3%, lazy eval addresses the wrong problem. Accepted.
-- σ-parameterized cost model modest R² improvement. Accepted as publishable with appropriate caveats.
-- "Structural qualification-time asymmetry" as dominant explanation for 40% gap. Researcher correctly updated this narrative after Experiment 31. Accepted.
-
----
+**Pushback accepted — not re-raising:**
+- Cross-model validation deferred as documented limitation. Accepted (but still recommended).
+- `PairTracker._retracted` unbounded growth. `clear_retracted()` exists. Accepted.
+- Simulation vs live API for full-corpus: researcher's argument that IncrementalState simulation uses the same library code is valid for pair-check savings. But token savings requires a live API run (see below).
 
 ## Scores
 
 | Criterion | Score | Delta | Comment |
 |-----------|-------|-------|---------|
-| Novelty | 7/10 | 0 | P=1.0 protocol, retraction taxonomy, at-risk fraction tool are independently publishable. The 94.3% A/C result is stronger than before — but it's driven by a 2-line bug fix. The paper must carefully separate architectural contribution (IncrementalState framework) from protocol contribution (monotone attribute semantics) or a reviewer will frame this as "they fixed their own bug." |
-| Technical Soundness | 7/10 | 0 | V3 Run 2 is internally valid. However: 94.3% from one run; k-sensitivity data missing; Tasks 3/6 V3 not run; token overhead ranging 1.14×–4.84× across conditions — these prevent a higher score. |
-| Benchmark Performance | 8/10 | +1 | 94.3% A/C with P=1.0 on identical 25K-char budget is genuinely strong if confirmed reproducible. Score is conditional on library-level fix and multi-run stability confirmation. |
-| Scalability | 5/10 | -1 | k-sensitivity is STILL missing after 13 iterations. This is the paper's core scalability claim and remains completely unquantified. The infrastructure (`run_k_sensitivity_sweep()`) exists but has never been called. Downgrade until the data exists. |
-| Research Maturity | 6/10 | -1 | The 94.3% headline comes from a single lucky run (Run 2). Run 1 gives 69.5%. A paper submitting with two runs diverging by 25pp on the primary metric will be rejected for cherry-picking. Library fix + multi-run confirmation required before any submission-quality claim. |
-
----
+| Novelty | 8.0/10 | +0.5 | No-retraction counterfactual + apply_edits() strengthen the retraction narrative. Full-corpus F1≈1.0 makes the efficiency claim dramatically more compelling. |
+| Technical Soundness | 8.5/10 | +0 | apply_edits() implementation is correct for multi-entity edits (verified by code review). Minor encapsulation violation and telemetry inflation issue (see Code Issues). 193 tests passing. |
+| Benchmark Performance | 8.0/10 | +1.5 | Major improvement. Full-corpus F1=1.0 (Task 1), 0.993 (Tasks 3/6) with 64% check savings. This is the result the paper needed. But it's simulation-only — the live API confirmation is still the missing piece for the headline table. |
+| Scalability | 6.5/10 | +0 | Still single model (gpt-4o-mini), single corpus. The full-corpus simulation shows the framework scales to 96K chars. But ~19K chars/chunk is a real chunk size that needs live API validation — does the LLM comply when the chunk is 4× larger? |
+| Research Maturity | 8.0/10 | +0.5 | 9 documented contributions, paper-ready tables, full-corpus numbers, counterfactual evidence. Close to submission. The live API run is the one remaining must-do. |
 
 ## Architecture Review
 
-### Critical Blocker: `monotone_attrs` Not Yet in `process_chunk()` Library
+### apply_edits() — Correct but with Minor Issues
 
-Examining `rlm/core/incremental.py` confirms: `process_chunk()` still has signature `(self, chunk_index, new_entities, pair_checker=None)` — no `monotone_attrs` parameter. The monotone fix lives entirely in the REPL template (`CHUNK_PROMPT_LABEL_AWARE_V3`), which is why compliance is stochastic.
+Reviewed the full implementation (lines 518-595 of `rlm/core/incremental.py`). The multi-entity interaction semantics are correct:
 
-The failure mode is now precisely characterized by the raw Run 1 data:
-- Turn 2: delta=2, phantom_chunk=True, iteration_count=7 → model processed 2 chunks in one turn because the 6-line monotone loop confused chunk_idx tracking
-- Turn 3: delta=0 → stagnation because chunk_idx was consumed by the phantom
-- Turn 1, 2, 4 each used 7 REPL iterations (maximum) → the complex template is driving max-iteration behavior
-- Total: 116,120 input tokens = **4.84× oracle** (vs Run 2's 2.42× and V2's 1.14×)
+- **Ordering**: When entities A and B are both edited and share a pair, A is processed first (retract, re-evaluate, check new), then B. The pair (A,B) may be retracted and re-added during A's pass, then retracted again during B's pass with B's updated attributes. The final pair set is correct because B's pass sees A's already-updated attributes.
+- **Upgrade-upgrade**: Both A and B non-qualifying → qualifying. A's pass doesn't discover (A,B) because B isn't updated yet. B's pass discovers it. Correct.
+- **Downgrade-downgrade**: Both downgraded. A's pass retracts (A,B) and cleans up B's index. B's pass has nothing to retract. Correct.
 
-The library-level fix eliminates this by reducing the REPL template from ~25 lines back to V2 levels (~15 lines) — the model has less complex code to correctly emit. The concrete API addition:
+**Issue 1 — Encapsulation violation (line 575)**: `if canonical in self.pair_tracker._pairs` directly accesses the private `_pairs` set. Add a `has_pair()` or `__contains__` method to PairTracker. This is a code smell that will cause problems if the internal representation changes.
+
+**Issue 2 — Telemetry double-counting for multi-entity edits**: When two edited entities share a pair, `total_retracted` counts the same pair twice (once per entity's retraction). `pairs_readded` also counts the re-add twice. The net `permanent_retractions` calculation (`total_retracted - pairs_readded`) is correct because the inflation cancels, but the individual `total_retracted` and `pairs_readded` fields overstate the true values. For 5-10 edits this is negligible; for larger edit batches it could mislead analysis.
+
+**Concrete fix**: Process all retractions first (collect retracted pairs into a deduplicated set), then re-evaluate once. This separates the retract and evaluate phases:
 
 ```python
-def process_chunk(
-    self,
-    chunk_index: int,
-    new_entities: dict[str, dict[str, Any]],
-    pair_checker: Any = None,
-    monotone_attrs: set[str] | None = None,  # NEW
-) -> dict[str, Any]:
+def apply_edits(self, edits, pair_checker=None, edit_chunk_index=-1):
+    # Phase 1: Update all entities and collect ALL retracted pairs
+    all_retracted = set()
+    for eid, new_attrs in edits.items():
+        self.entity_cache.add(eid, new_attrs, chunk_index=edit_chunk_index)
+        retracted = self.pair_tracker.retract_entity(eid)
+        all_retracted |= retracted
+
+    total_retracted = len(all_retracted)  # Deduplicated count
+
+    # Phase 2: Re-evaluate all retracted pairs with updated attributes
+    pairs_readded = 0
+    new_pairs_from_edits = 0
+    if pair_checker:
+        for p in all_retracted:
+            a1 = self.entity_cache.get(p[0])
+            a2 = self.entity_cache.get(p[1])
+            if a1 and a2 and pair_checker(a1, a2):
+                self.pair_tracker.add_pair(p[0], p[1])
+                pairs_readded += 1
+
+        # Phase 3: Check for new pairs (edited entities × all)
+        edited_ids = set(edits.keys())
+        for eid in edited_ids:
+            updated_attrs = self.entity_cache.get(eid)
+            for other_id in self.entity_cache.get_ids():
+                if other_id == eid:
+                    continue
+                if self.pair_tracker.has_pair(eid, other_id):
+                    continue
+                other_attrs = self.entity_cache.get(other_id)
+                if other_attrs and pair_checker(updated_attrs, other_attrs):
+                    self.pair_tracker.add_pair(eid, other_id)
+                    new_pairs_from_edits += 1
+    # ... telemetry updates
 ```
 
-When `monotone_attrs` is provided, the entity `add()` loop should merge: for any `attr` in `monotone_attrs`, if `cached_val` is truthy and `new_val` is falsy, keep `cached_val`. Additionally — and this is the key optimization — if ALL `monotone_attrs` values are unchanged after merging (the entity's effective state is identical), skip adding it to `updated_ids`. This prevents retraction + `updated × all` sweep for entities whose cached classification is identical, eliminating the 1,078 no-op retractions from V3 Run 2 at zero correctness cost.
+This is also more efficient: O(|all_retracted|) re-evaluations instead of potentially re-evaluating the same pair twice.
 
-**This single library change unlocks everything else in Iteration 13:** k-sensitivity sweep, Tasks 3/6 V3, multi-run stability — all become reliable.
+### dynamic_context_experiment.py Still Uses Manual Edit Path
 
-### V3 Token Overhead Is Understated in the Research Log
+The researcher noted "Update dynamic context experiment to use apply_edits()" as a next step but didn't implement it. The live API REPL code (lines 95-136) still manually calls `entity_cache.add()` + `pair_tracker.retract_entity()` + manual loop. This means the live API experiment validates the MANUAL path, not the `apply_edits()` library method.
 
-The research log documents V3's token ratio as "2.42× vs oracle." This is the Run 2 number only. Run 1 shows **4.84×** with 60% compliance. The paper cannot present 2.42× as the characteristic overhead of V3 without acknowledging the full distribution.
+**Impact**: The paper claims "apply_edits() handles dynamic context" but the only live API evidence uses a different code path. The counterfactual experiment (Exp 48) DOES use `apply_edits()`, which is good, but that's a simulation.
 
-The decomposition matters for the paper's cost framing:
-- V2 (no monotone fix, 100% compliant): 27,504 tokens = 1.14× oracle
-- V3 Run 2 (template fix, 100% compliant): 60,005 tokens = 2.42× oracle
-- V3 Run 1 (template fix, 60% compliant): 116,120 tokens = 4.84× oracle
-
-The gap between V2 (1.14×) and V3 Run 2 (2.42×) — even under perfect compliance — is a 2.18× increase driven by the longer REPL template producing more LM output tokens and more within-turn REPL iterations. With library-level `monotone_attrs`, the template shrinks back to V2 complexity, and the token overhead should return near 1.14×. This needs empirical confirmation after the library fix — it's a key efficiency claim.
-
-### No-Op Retraction Count Is Mischaracterized
-
-V3 Run 2 shows 1,078 "no-op retractions." The current docstring on `_retracted` conflates permanently-invalidated pairs with temporarily-retracted-then-re-added pairs. After V3's monotone fix, all 1,078 retraction cycles result in immediate re-addition (qualifying=True preserved → pair re-added). So `_retracted` is actually empty after each cycle. But `_retraction_count` still increments by 1,078. The paper should report "1,078 retraction cycles (all re-added)" vs "0 permanently-invalidated pairs" — not just "1,078 retractions" which sounds like 1,078 pairs lost.
-
----
+**Recommendation**: Update the REPL template in `dynamic_context_experiment.py` to call `_incremental.apply_edits(edits_dict, pair_checker=check_pair)`. This is a ~10-line change that aligns the live API evidence with the library API.
 
 ## Novelty Assessment
 
-### The "Bug Fix" Framing Risk
+### Genuinely Novel (Strong — quantify these in the paper)
 
-The headline result of Iteration 12 is that a 2-line bug fix raises A/C from 64.3% to 94.3%. A reviewer will ask: **"Is this a novel contribution or a debugging exercise?"**
+1. **F1≈1.0 at 64% pair-check savings on full corpus** — the headline result. Transforms the contribution from "efficient but barely works" to "efficient AND nearly perfect."
+2. **P=1.0 across ALL runs, ALL turns, ALL tasks** — the most surprising empirical finding. Frame prominently.
+3. **Retraction is essential, not optional**: No-retraction counterfactual shows precision drops from 1.0 to 0.81 with 10 edits. Concrete evidence that the mechanism provides real value.
+4. **Library-vs-template design principle**: V3→V4 demonstrating that invariants belong in library code. Broadly useful for LLM program design.
+5. **At-risk fraction as a predictive diagnostic**: Validated ordering across 3 tasks.
 
-The paper must frame this as a **correctness condition discovery**, not a bug fix:
+### The Contribution That's Underemphasized
 
-**"Incremental computation over attributed entities requires monotone attribute accumulation as a semantic correctness condition for 'at least one' predicate types. We identify this condition (the monotone accumulation requirement), characterize its violation (the attribute-overwriting failure mode), provide an analytical tool for predicting its impact (at-risk fraction), and show that enforcing correct monotone semantics via library support nearly closes the gap between streaming and batch oracle."**
+The **"library-level correctness guarantees for LLM programs"** idea is more general than the pair-finding application. The insight: when you decompose an LLM task into structured stateful computation (EntityCache, PairTracker, retraction), the library can enforce invariants that the LLM cannot reliably maintain via prompts alone. V3→V4 is a clean demonstration:
 
-Under this framing, the contribution is:
-1. **Correctness condition**: Monotone attribute accumulation is necessary for streaming correctness of "existential" predicates. Prior streaming systems (e.g., incremental join processing) don't consider LLM-generated attribute streams where labels appear non-uniformly across chunks.
-2. **Analytical tool**: At-risk fraction (proportion of qualifying entities that reappear with downgraded labels) predicts impact before running experiments.
-3. **Architectural mechanism**: Library-level `monotone_attrs` parameter enforces the condition without burdening prompt templates, maintaining high compliance.
+| | Template-level (V3) | Library-level (V4) |
+|---|---|---|
+| Compliance | 60-100% (stochastic) | 100% (deterministic) |
+| Token overhead | 2.4-4.8× | 1.3× |
+| Retractions | ~1,078 no-op | 0 |
 
-### The At-Risk Fraction Is the Most Underemphasized Contribution
+This is a broadly applicable finding for any "LLM programs with REPL execution" system. Frame it as a design principle, not just an optimization.
 
-The Gini analysis and at-risk fraction tool (23.2%, 26.6%, 31.7% for Tasks 1, 3, 6) are the most novel analytical output. This tool:
-- Predicts fix impact across tasks before running expensive experiments
-- Provides a corpus-level deployment diagnostic
-- Generates a falsifiable cross-task prediction
+## 3rd-Party Clarity Test
 
-**This prediction is currently unverified.** Task 6 V3 has NOT been run. If Task 6 V3 achieves A/C > Task 1 V3's 94.3%, the tool is validated. If not, the tool's predictive power requires recalibration. **Either outcome strengthens the paper** — but the experiment must be run.
+### Table 9 (Full-Corpus A vs D Simulation): ⚠️ PARTIAL PASS — Simulation Only
 
-### What Would Make This More Novel (Minimum Required)
+A skeptical engineer reads: "F1=1.0 on the full corpus, 64% pair-check savings." Strong result. But then asks: **"These are simulated pair checks, not actual LLM token savings. Where's the live API run?"**
 
-Two additions to increase cross-task generalization confidence:
-1. **Non-monotone task test**: Run Task 11 or 13 (asymmetric "exactly N") with V3 framework but `monotone_attrs=None` (correct, since "exactly N" is non-monotone). A/C should NOT improve from V2 baseline. This validates that `monotone_attrs=None` correctly handles non-monotone conditions and that the V3 improvement is specifically due to monotone semantics, not some other change.
-2. **Cross-task ordering validation**: Tasks 3 and 6 V3 (planned but unrun). If Task 6 A/C improvement > Task 3 > Task 1 (matching at-risk fraction ordering), the at-risk fraction tool is validated as a predictor.
+The simulation uses `IncrementalState` directly — no LLM involved. It proves:
+- ✅ The library correctly computes incremental pair checks
+- ✅ The monotone merge produces identical results to full recompute
+- ✅ Pair-check savings match structural formula
 
----
+It does NOT prove:
+- ❌ Token savings (which depend on prompt overhead, LLM iteration counts, etc.)
+- ❌ LLM compliance at ~19K chars/chunk (4× larger than the validated 5K chunks)
+- ❌ F1≈1.0 through the full RLM pipeline (LLM extraction errors could reduce this)
+
+**Blocking issue**: The paper cannot claim "77-86% token savings at F1≈1.0" without a live API full-corpus run. It CAN claim "64% pair-check savings at F1=1.0 (simulation)" and "77-86% token savings at F1=0.32 (live API, 25K context)" separately. But the combined claim requires combined evidence.
+
+### Table 10 (No-Retraction Counterfactual): ✅ PASSES
+
+Clear comparison: with vs without retraction, same edits, same starting state. Precision drops from 1.0 to 0.81-0.92. 99-240 invalid pairs persist. Unambiguous.
+
+Minor note: this uses the 25K subset (4 chunks × 5K). Running on the full corpus would show more dramatic numbers.
+
+### Table 2c (Cross-Task D vs A, Live API): ✅ PASSES (unchanged)
+
+Still the strongest table. 4 experiments, 3 tasks, 100% quality retention, 77-86% token savings. Real API numbers.
+
+### Headline Paper Table — STILL INCOMPLETE
+
+The paper needs ONE table that tells the complete story. Current state:
+
+| Approach | Context | F1 | Pair Savings | Token Savings | Cost | Time |
+|----------|---------|-----|-------------|---------------|------|------|
+| Naive RLM (no framework) | 25K | 0.0 | — | — | $0.025 | 135s |
+| Full-recompute D (25K) | 25K | 0.3228 | baseline | baseline | ~$0.05 | ~250-540s |
+| Incremental A (25K) | 25K | 0.3228 | 58% (sim) | **77-86%** | ~$0.007 | ~120s |
+| Oracle C (25K) | 25K | 0.3424 | — | — | ~$0.004 | ~30s |
+| Oracle C (96K) | 96K | 1.0 | — | — | — | — |
+| **Full-corpus A (96K)** | 96K | **1.0 (sim)** | **64% (sim)** | **? (no live data)** | **?** | **?** |
+| **Full-corpus D (96K)** | 96K | **1.0 (sim)** | baseline | **?** | **?** | **?** |
+
+The "?" cells are why the live API full-corpus run is essential. A reviewer will see: "The best F1 numbers are simulation-only. The live API numbers cap at F1=0.32."
 
 ## Experiment Critique
 
-### k-Sensitivity — 13 Iterations Without the Paper's Core Scalability Figure
+### What's Solid
 
-The `run_k_sensitivity_sweep()` function was implemented in `eval/label_aware_v3_experiment.py` at Iteration 12. It exists. It has never been called. There is no `k_sensitivity_v3.json` in `results/streaming/`. This is **the paper's primary scalability claim**, and it is completely unmeasured.
+1. **Full-corpus simulation**: Clean, reproducible, matches structural prediction. 3 tasks. Good.
+2. **No-retraction counterfactual**: Well-designed ablation study. Quantifies retraction value concretely.
+3. **apply_edits() with 5 tests**: Good software engineering. Makes the API claim honest.
+4. **All prior work**: D vs A comparison, multi-run stability, k-sensitivity, at-risk fraction — all remain valid and strong.
 
-The sweep needs to answer:
-1. Does A/C ratio stay ~94% at k=3 (8.3K chars/chunk)? At k=7 (3.6K chars/chunk)? At k=10 (2.5K chars/chunk)?
-2. How does total token cost A/C scale with k?
-3. What is the iso-cost k where tokens(A) ≈ tokens(C)?
+### What's Missing (in priority order)
 
-**Testable prediction from first principles:** At smaller k (coarser chunks = more chars/turn), more qualifying entities appear per chunk, reducing the structural asymmetry from entities that qualify after their potential partners were processed. Expect A/C to be **higher at k=3** than at k=5. At larger k (finer chunks), each chunk contains fewer qualifying entities and more early-qualification misses. Expect A/C to **decrease at k=10**. If this monotone relationship holds, the paper can offer a principled recommendation: "use k≤5 for maximum oracle fidelity; k>5 for lower per-turn context cost." If the relationship is non-monotone, that's an unexpected finding worth reporting.
+1. **Live API full-corpus run (HIGHEST — $0.50-1.00, ~2 hrs)**:
+   Run Condition A and D on 96K chars with live gpt-4o-mini calls. Expected: F1 close to 1.0 (sim shows 1.0), token savings similar to structural (66.7%), same P=1.0. The `--full-corpus-live` flag is already implemented.
 
-Run this experiment immediately after the library-level monotone fix. Cost: ~$15-20.
+   **Why simulation isn't enough**: At ~19K chars/chunk, the LLM receives 4× more context per turn than the validated 5K setting. Compliance, extraction accuracy, and iteration count may all differ.
 
-### Tasks 3 and 6 V3 — Falsifiable Prediction Unverified
+2. **Migrate dynamic_context_experiment.py to use apply_edits() ($0, 30 min)**:
+   Replace REPL template lines 95-136 with `_incremental.apply_edits(edits_dict, pair_checker=check_pair)`. Aligns live API evidence with library API.
 
-The at-risk fraction predicts: Task 6 (31.7% at-risk) benefits more from the V3 fix than Task 1 (23.2%). Measured improvement for Task 1: +30.0pp (64.3% → 94.3%).
+3. **apply_edits() two-phase refactor ($0, 1 hr)**:
+   Separate retract-all from re-evaluate-all. Fix telemetry inflation. Add multi-entity interaction test.
 
-If the relationship is linear (unrealistic but as a bound): Task 6's 31.7% at-risk → expected ~+41pp improvement → starting at 55.5%, ending at ~96.5%. Actual result will likely be different due to nonlinearity, but the ordering (Task 6 ΔA/C > Task 1 ΔA/C) should hold if at-risk fraction is the right predictor.
-
-This experiment: $8-12, ~2 hours. The falsifiable prediction is the at-risk fraction tool's first real test. Run it immediately after the library fix.
-
-### Multi-Run Stability — Required Before Submission
-
-V3 Run 1: 60% compliance, A/C=69.5%, 4.84× tokens. V3 Run 2: 100% compliance, A/C=94.3%, 2.42× tokens. The 25pp A/C spread from two runs of identical configuration is the most vulnerable fact in the paper.
-
-After library-level fix, run Task 1 V3 three more times. Report:
-- Distribution of compliance rates (expect: 100% every run with simplified template)
-- Distribution of A/C ratios (expect: ≈94% every run when compliant)
-- Distribution of token ratios (expect: near V2's 1.14× with simplified template)
-
-If the standard deviation on A/C ratio drops to <3pp across 5 runs, the 94.3% headline is defensible. If it stays >10pp, the result depends on stochastic compliance and requires a different framing.
-
-### Condition B V3 — Implemented, Not Yet Run
-
-`run_condition_b_v3()` uses `RLM_SYSTEM_PROMPT` (correct). No result file exists. Cost: $2. Run it. The V2 B result (F1=0.0193) may have been depressed by the wrong system prompt. Quantifying the distortion closes a known reviewer vulnerability.
-
----
+4. **Cross-model spot check (LOW — $0.50, 30 min)**:
+   Single gpt-4o run. Still deferred, still recommended.
 
 ## The One Big Thing
 
-**Implement `monotone_attrs` in `process_chunk()` at the library level, simplify the REPL template, then run Task 1 V3 three more times to confirm stable 94.3% A/C.**
+**Run the live API full-corpus experiment.** The code exists (`--full-corpus-live`). It costs ~$1 and takes ~2 hours. This single experiment:
 
-The 94.3% headline is the paper's primary result. It rests on one run. Every remaining experiment (k-sensitivity, Tasks 3/6 V3, non-monotone sanity check, Condition B V3) depends on reliable compliance. The library fix reduces REPL template complexity, eliminates stochastic compliance failure, and brings token overhead back near V2's 1.14×. This is 2-3 hours of implementation + 1 hour of testing. Everything else can follow.
+1. Fills the "?" cells in the headline table
+2. Proves F1≈1.0 through the full RLM pipeline (not just simulation)
+3. Validates LLM compliance at ~19K chars/chunk
+4. Provides real token savings numbers at full-corpus scale
+5. Makes the paper submission-ready
 
----
+Without it, the paper has a split personality: "our simulation shows F1=1.0" but "our actual system shows F1=0.32." A reviewer will fixate on the live number.
 
 ## Specific Experiments to Run
 
-In execution order (each step enables the next):
+1. **Live API full-corpus run ($1, ~2 hrs) — MUST-DO**
+   ```bash
+   python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 1 --k 5
+   python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 3 --k 5
+   python eval/full_corpus_and_counterfactual.py --full-corpus-live --task 6 --k 5
+   ```
+   Expected: F1 ≈ 0.9-1.0, token savings ~65-80%, P=1.0.
+   If compliance breaks at ~19K chars/chunk, try k=3 (~32K chars/chunk) or k=7 (~14K chars/chunk).
 
-1. **Implement `monotone_attrs` in `process_chunk()` ($0, ~2 hrs, code only)**:
-   - Add `monotone_attrs: set[str] | None = None` parameter to `IncrementalState.process_chunk()`
-   - In entity add loop (step 1): when entity is an update and `monotone_attrs` specified, merge attrs — for each `attr` in `monotone_attrs`, if `old_cached_val` is truthy and `new_val` is falsy, set `new_val = old_cached_val`
-   - Optimization: if all `monotone_attrs` values are unchanged after merge, do NOT add to `updated_ids` — skips retraction + `updated × all` sweep for that entity (eliminates no-op retractions)
-   - Update `CHUNK_PROMPT_LABEL_AWARE_V3` to call `process_chunk(chunk_idx, entities, check_pair, monotone_attrs={"qualifying"})` — remove the 6-line propagation loop
-   - Add 4 unit tests: (a) monotone attr preserved on downgrade, (b) retraction skipped when only monotone attrs change, (c) retraction fires when non-monotone attrs change, (d) `None` preserves existing behavior exactly
-   - Expected outcome: REPL template drops to V2 complexity → 100% compliance deterministically
+2. **Migrate dynamic_context_experiment.py to apply_edits() ($0, 30 min)**
+   Update REPL template lines 95-136 to use `_incremental.apply_edits()`.
 
-2. **Task 1 V3 multi-run stability ($12-15, ~3 hrs)**:
-   - Run Task 1 with library-level monotone fix 3 times (total 5 including Runs 1-2)
-   - Report: compliance rate, A/C ratio, token ratio, F1 — per run and as mean ± std
-   - If mean A/C > 90%, std < 5pp, and all compliance rates = 100%: result is publishable
-   - Expected: token ratio returns near 1.14× (matching V2) due to simplified template
+3. **apply_edits() encapsulation fix + two-phase refactor ($0, 1 hr)**
+   Add `PairTracker.has_pair(id1, id2) -> bool`. Separate retract/evaluate phases in apply_edits(). Add test: edit 2 entities sharing a pair, verify deduplicated retraction count.
 
-3. **Tasks 3 and 6 V3 ($8-12, ~2 hrs)**:
-   - Run with library-level monotone fix
-   - Verify prediction ordering: ΔA/C(Task 6) > ΔA/C(Task 3) > ΔA/C(Task 1)
-   - If ordering holds: at-risk fraction is validated as a predictor (key paper result)
-   - If ordering fails: characterize which at-risk fraction measure is wrong and why (still a finding)
+4. **Full-corpus no-retraction counterfactual ($0, 15 min)**
+   Run on 96K chars. More entities → more dramatic precision drop. Strengthens the retraction argument.
 
-4. **k-sensitivity sweep, Task 1, k ∈ {3, 7, 10} ($15-20, ~3 hrs)**:
-   - Use library-level V3 with simplified template
-   - Per k: F1(A), F1(C), A/C ratio, tokens(A)/tokens(C), compliance rate
-   - This is Figure 1 of the paper. Cannot omit.
-   - Also compute iso-cost k: smallest k where tokens(A) ≤ 1.5×tokens(C)
-
-5. **Condition B V3 with corrected system prompt ($2, 30 min)**:
-   - `run_condition_b_v3()` is implemented — just run it
-   - Report F1(B V3) vs F1(B V2) = 0.0193
-   - Closes known paper vulnerability in A/B comparison
-
-6. **Task 11 non-monotone sanity check ($3, 30 min)**:
-   - Run Task 11 ("exactly N") with V3 framework, `monotone_attrs=None`
-   - Verify A/C ≈ V2 Task 11 baseline (fix should have no effect on non-monotone conditions)
-   - Confirms `monotone_attrs=None` path is correct; validates monotone fix is targeted
-
----
+5. **Chunk boundary alignment check ($0, 15 min)**
+   Verify that `full_corpus_and_counterfactual.py`'s character-boundary chunking doesn't split mid-entity-profile. If it does, align to user profile boundaries (use the regex-based chunking from `_make_sequential_chunks`).
 
 ## Code Issues Found
 
-1. **`process_chunk()` lacks `monotone_attrs` parameter (CRITICAL — `rlm/core/incremental.py` line 242)**:
-   Signature is `(self, chunk_index, new_entities, pair_checker=None)`. The library-level fix is the highest-priority code change in this iteration. Without it, every V3 experiment has stochastic compliance because the REPL template carries the semantic burden.
+1. **`apply_edits()` accesses private `_pairs` — `rlm/core/incremental.py` line 575**:
+   ```python
+   if canonical in self.pair_tracker._pairs:  # Private access
+   ```
+   Fix: Add `has_pair(id1, id2) -> bool` to PairTracker, then use `self.pair_tracker.has_pair(eid, other_id)`.
 
-2. **No-op retractions with V3 will remain unless library fix skips retraction for monotone-only changes (`rlm/core/incremental.py` step 2, retraction loop)**:
-   Even after library fix, unless the optimization (skip `updated_ids` for monotone-only changes) is included, 1,078 retraction cycles will still fire per 5-chunk run. The optimization is: after computing merged attrs, if `all(merged[a] == old[a] for a in monotone_attrs)`, do NOT add to `updated_ids`. This is O(|monotone_attrs|) per entity and eliminates the O(degree × n) retraction cost.
+2. **`apply_edits()` telemetry inflated for multi-entity edits — lines 549-581**:
+   When two edited entities share a pair, `total_retracted` and `pairs_readded` both count the pair twice. Net calculation is correct (inflation cancels). Fix with two-phase refactor above.
 
-3. **V3 Run 1 token data (4.84×) not documented in research log**:
-   The log states V3 token ratio as 2.42× (Run 2 only). Run 1 at 4.84× is only visible in the raw JSON file. The research log should document the full distribution: "V3 Run 1: 4.84× (60% compliance), V3 Run 2: 2.42× (100% compliance)." A reviewer who reads only the log and then checks the raw JSON will flag this as selective reporting.
+3. **`dynamic_context_experiment.py` REPL template bypasses `apply_edits()` — lines 95-136**:
+   Live API evidence misaligned with library API. Update to call `_incremental.apply_edits()`.
 
-4. **`k_sensitivity_v3.json` does not exist despite `run_k_sensitivity_sweep()` being implemented (`eval/label_aware_v3_experiment.py` line 632)**:
-   The sweep is ready to call. It's gated on `--run-sweep` flag in the main block. This has simply never been executed. Run it.
+4. **`compute_gold_pairs_with_edits()` doesn't use `_check_pair_condition()` — `eval/dynamic_context_experiment.py` lines 211-238**:
+   Simplified check, correct for Task 1 only. Add `assert task_idx == 1` guard or use the real checker.
 
-5. **`PairTracker._retraction_count` conflates retraction-and-re-added with permanently-invalidated in paper narrative**:
-   `_retraction_count` increments for every `retract_entity()` call regardless of whether pairs are subsequently re-added. V3 Run 2's 1,078 reported "retractions" are all retract-and-re-add cycles, not permanent invalidations. The paper should distinguish these: "1,078 no-op retraction cycles" vs "X permanently invalidated pairs." Consider adding `_permanent_retraction_count` or documenting this distinction clearly in the stats output.
+5. **`tests/clients/test_gemini.py` collection error**: Import error prevents full test suite from running. Pre-existing but should be fixed.
 
----
+6. **`full_corpus_and_counterfactual.py` character-boundary chunking (lines 271-275)**: May split mid-entity-profile. Verify this doesn't cause entity loss in the live API path.
 
 ## Acknowledged Limitations
 
-- All live experiments use gpt-4o-mini (one model) on OOLONG-Pairs (one corpus, N=231). Cross-model and cross-corpus generalization are out of scope for this proof-of-concept. Frame as "single-model study; generalization requires future work."
-- V3 94.3% A/C is currently one-run evidence. Multi-run stability analysis resolves this within project scope (Experiment 2 above).
-- Token overhead for V3 with REPL template fix (2.42×) differs from V3 with library fix (expected ~1.14×). Cannot make the library-fix efficiency claim without running it empirically.
-- The "streaming" benchmark uses static data chunked sequentially — accepted scoping. The benchmark characterizes sequential context ingestion under fixed token-per-turn constraints, not live data streams.
-- No lazy retraction implementation: correctly deferred. The 5.7% structural residual gap after V3 fix is too small to justify the architectural complexity. Paper should characterize this residual as "entities that gain qualifying status only in their final chunk appearance" — correct structural description for the remaining gap.
+- Single model (gpt-4o-mini). Cross-model validation deferred as documented limitation. Accepted.
+- OOLONG-Pairs corpus only (N=231 entities). Cross-corpus validation out of scope. Accepted.
+- Dynamic context experiment uses hand-crafted balanced edits. Accepted for POC.
+- Non-monotone tasks (Task 11) show F1=0.047 — documented scope boundary. Accepted.
+- Token variance in Condition D (3× range across runs). Structural formula mitigates. Accepted.

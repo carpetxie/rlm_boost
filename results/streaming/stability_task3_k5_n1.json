@@ -1,0 +1,95 @@
+{
+  "task": 3,
+  "k": 5,
+  "num_runs": 1,
+  "model": "gpt-4o-mini",
+  "temperature": null,
+  "gold_pairs_count": 10440,
+  "total_context_chars": 96689,
+  "runs": [
+    {
+      "run": 1,
+      "f1": 0.9931,
+      "precision": 1.0,
+      "recall": 0.9862,
+      "total_input_tokens": 30024,
+      "total_output_tokens": 5850,
+      "compliance_rate": 1.0,
+      "wall_clock_sec": 140.01,
+      "total_wall_sec": 140.1,
+      "permanent_retractions": 0,
+      "noop_retractions": 0,
+      "per_turn_retractions": [
+        {
+          "turn": 1,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 2,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 3,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 4,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        },
+        {
+          "turn": 5,
+          "noop_retractions": 0,
+          "permanent_retractions": 0
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "f1": {
+      "mean": 0.9931,
+      "std": 0.0,
+      "min": 0.9931,
+      "max": 0.9931
+    },
+    "precision": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "recall": {
+      "mean": 0.9862,
+      "std": 0.0,
+      "min": 0.9862,
+      "max": 0.9862
+    },
+    "compliance_rate": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "total_input_tokens": {
+      "mean": 30024,
+      "std": 0.0,
+      "min": 30024,
+      "max": 30024
+    },
+    "total_output_tokens": {
+      "mean": 5850,
+      "std": 0.0,
+      "min": 5850,
+      "max": 5850
+    },
+    "wall_clock_sec": {
+      "mean": 140.01,
+      "std": 0.0,
+      "min": 140.01,
+      "max": 140.01
+    }
+  }
+}
